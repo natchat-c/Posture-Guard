@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "616136459870",
+    "firebase_url": "https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "posture-guard-ab657",
+    "storage_bucket": "posture-guard-ab657.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:616136459870:android:be980807d9dbad3de216cf",
+        "android_client_info": {
+          "package_name": "com.example.postureguard"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvVVLg-RYaqCFPuupeUWyxYPDLiPnAWko"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
