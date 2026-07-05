@@ -14,6 +14,7 @@ import 'customize_page.dart';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
+
   final String title;
 
   @override
@@ -51,7 +52,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Timer? usageTimer;
 
-  final int alertDelaySeconds = 10;
+  int alertDelaySeconds = 10;
+  int alertFrequencySeconds = 60;
+  bool alertsEnabled = true;
 
   DateTime lastFaceDetectionTime = DateTime.now();
 
@@ -68,6 +71,7 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
     );
 
+    loadSettings();
     loadTodayStats();
 
     startUsageTimer();
@@ -91,6 +95,12 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  DatabaseReference get settingsRef {
+    return FirebaseDatabase.instance.ref(
+      'users/demo_user/settings',
+    );
+  }
+
   double get dailyScore {
     if (totalScreenTime == 0) return 100.0;
 
@@ -108,6 +118,46 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     return '${minutes}m ${remainingSeconds}s';
+  }
+
+  Future<void> loadSettings() async {
+    try {
+      final snapshot = await settingsRef.get();
+
+      if (!snapshot.exists || snapshot.value == null) {
+        await saveSettings();
+        return;
+      }
+
+      final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
+
+      if (!mounted) return;
+
+      setState(() {
+        alertDelaySeconds =
+            (data['alertDelaySeconds'] as num?)?.toInt() ?? 10;
+
+        alertFrequencySeconds =
+            (data['alertFrequencySeconds'] as num?)?.toInt() ?? 60;
+
+        alertsEnabled = data['alertsEnabled'] as bool? ?? true;
+      });
+    } catch (e) {
+      print('Load settings Firebase error: $e');
+    }
+  }
+
+  Future<void> saveSettings() async {
+    try {
+      await settingsRef.set({
+        'alertDelaySeconds': alertDelaySeconds,
+        'alertFrequencySeconds': alertFrequencySeconds,
+        'alertsEnabled': alertsEnabled,
+        'updatedAt': ServerValue.timestamp,
+      });
+    } catch (e) {
+      print('Save settings Firebase error: $e');
+    }
   }
 
   Future<void> loadTodayStats() async {
@@ -344,7 +394,9 @@ class _MyHomePageState extends State<MyHomePage> {
         isBadPostureNow = true;
         startOrContinueBadPostureTimer();
 
-        if (badPostureSeconds >= alertDelaySeconds) {
+        if (!alertsEnabled) {
+          newStatus = 'WARNING';
+        } else if (badPostureSeconds >= alertDelaySeconds) {
           newStatus = 'BAD';
         } else {
           newStatus = 'WARNING';
@@ -417,6 +469,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void dispose() {
     saveTodayStats();
+    saveSettings();
 
     usageTimer?.cancel();
 
@@ -453,17 +506,34 @@ class _MyHomePageState extends State<MyHomePage> {
                       label: Text('$_counter'),
                     ),
                   ),
+
                   SizedBox(
                     width: 40,
                     height: 40,
                     child: FloatingActionButton(
-                      onPressed: () {
-                        Navigator.push(
+                      onPressed: () async {
+                        final result = await Navigator.push<SettingsResult>(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const settings(),
+                            builder: (context) => Settings(
+                              initialAlertDelaySeconds: alertDelaySeconds,
+                              initialAlertFrequencySeconds:
+                                  alertFrequencySeconds,
+                              initialAlertsEnabled: alertsEnabled,
+                            ),
                           ),
                         );
+
+                        if (result != null) {
+                          setState(() {
+                            alertDelaySeconds = result.alertDelaySeconds;
+                            alertFrequencySeconds =
+                                result.alertFrequencySeconds;
+                            alertsEnabled = result.alertsEnabled;
+                          });
+
+                          await saveSettings();
+                        }
                       },
                       child: const Icon(Icons.settings),
                     ),
@@ -471,8 +541,11 @@ class _MyHomePageState extends State<MyHomePage> {
                 ],
               ),
             ),
+
             const SizedBox(height: 10),
+
             const Text('STATUS', style: TextStyle(fontSize: 20)),
+
             Text(
               postureStatus,
               style: TextStyle(
@@ -481,13 +554,22 @@ class _MyHomePageState extends State<MyHomePage> {
                 color: getStatusColor(),
               ),
             ),
+
             Text(
               'Score: $scorePercent',
               style: const TextStyle(fontSize: 18),
             ),
+
             const SizedBox(height: 20),
-            Image.asset('images/happy slime.png', width: 300, height: 300),
+
+            Image.asset(
+              'images/happy slime.png',
+              width: 300,
+              height: 300,
+            ),
+
             const Spacer(),
+
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -497,7 +579,9 @@ class _MyHomePageState extends State<MyHomePage> {
                   formatTime(totalScreenTime),
                   style: const TextStyle(fontSize: 20),
                 ),
+
                 const SizedBox(width: 100),
+
                 const Icon(Icons.sentiment_dissatisfied_sharp, size: 35),
                 const SizedBox(width: 10),
                 Text(
@@ -506,7 +590,9 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ],
             ),
+
             const SizedBox(height: 30),
+
             Padding(
               padding: const EdgeInsets.only(bottom: 25),
               child: Row(
@@ -533,7 +619,9 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ),
                   ),
+
                   const SizedBox(width: 15),
+
                   SizedBox(
                     width: 60,
                     height: 60,
@@ -542,7 +630,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => Statistics()
+                            builder: (context) => const Statistics(),
                           ),
                         );
                       },
