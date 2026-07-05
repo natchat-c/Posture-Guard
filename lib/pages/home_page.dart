@@ -542,11 +542,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => Statistics(
-                              totalScreenTime: totalScreenTime,
-                              totalBadPostureTime: totalBadPostureTime,
-                              score: dailyScore,
-                            ),
+                            builder: (context) => Statistics()
                           ),
                         );
                       },
