@@ -6,20 +6,29 @@ class Settings extends StatefulWidget {
     required this.initialAlertDelaySeconds,
     required this.initialAlertFrequencySeconds,
     required this.initialAlertsEnabled,
+    required this.initialDetectionMode,
   });
 
   final int initialAlertDelaySeconds;
   final int initialAlertFrequencySeconds;
   final bool initialAlertsEnabled;
+  final String initialDetectionMode;
 
   @override
   State<Settings> createState() => _SettingsState();
 }
 
 class _SettingsState extends State<Settings> {
+  static const String modePhoneOrientationOnly = 'phone_orientation_only';
+  static const String modePhoneOrientationCamera = 'phone_orientation_camera';
+  static const String modeCameraInAppOnly = 'camera_in_app_only';
+
+  static const int customOption = -1;
+
   late int alertDelaySeconds;
   late int alertFrequencySeconds;
   late bool alertsEnabled;
+  late String detectionMode;
 
   late int selectedDelayOption;
   late int selectedFrequencyOption;
@@ -28,7 +37,17 @@ class _SettingsState extends State<Settings> {
   final TextEditingController customFrequencyController =
       TextEditingController();
 
-  static const int customOption = -1;
+  String normaliseDetectionMode(String mode) {
+    if (mode == modePhoneOrientationCamera) {
+      return modePhoneOrientationCamera;
+    }
+
+    if (mode == modeCameraInAppOnly) {
+      return modePhoneOrientationCamera;
+    }
+
+    return modePhoneOrientationOnly;
+  }
 
   @override
   void initState() {
@@ -37,6 +56,7 @@ class _SettingsState extends State<Settings> {
     alertDelaySeconds = widget.initialAlertDelaySeconds;
     alertFrequencySeconds = widget.initialAlertFrequencySeconds;
     alertsEnabled = widget.initialAlertsEnabled;
+    detectionMode = normaliseDetectionMode(widget.initialDetectionMode);
 
     selectedDelayOption = [10, 30, 60].contains(alertDelaySeconds)
         ? alertDelaySeconds
@@ -64,6 +84,7 @@ class _SettingsState extends State<Settings> {
         alertDelaySeconds: alertDelaySeconds,
         alertFrequencySeconds: alertFrequencySeconds,
         alertsEnabled: alertsEnabled,
+        detectionMode: normaliseDetectionMode(detectionMode),
       ),
     );
   }
@@ -118,6 +139,7 @@ class _SettingsState extends State<Settings> {
                               width: 40,
                               height: 40,
                               child: FloatingActionButton(
+                                heroTag: 'settingsBackButton',
                                 onPressed: saveAndGoBack,
                                 child: const Icon(Icons.arrow_back),
                               ),
@@ -134,6 +156,45 @@ class _SettingsState extends State<Settings> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          const Text(
+                            'Detection mode',
+                            style: TextStyle(fontSize: 25),
+                          ),
+
+                          RadioListTile<String>(
+                            title: const Text('Phone orientation only'),
+                            subtitle: const Text(
+                              'Best for battery saving',
+                            ),
+                            value: modePhoneOrientationOnly,
+                            groupValue: detectionMode,
+                            onChanged: (value) {
+                              setState(() {
+                                detectionMode = value!;
+                              });
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                          ),
+
+                          RadioListTile<String>(
+                            title: const Text('Phone orientation + camera'),
+                            subtitle: const Text(
+                              'Camera confirms posture when phone angle is bad',
+                            ),
+                            value: modePhoneOrientationCamera,
+                            groupValue: detectionMode,
+                            onChanged: (value) {
+                              setState(() {
+                                detectionMode = value!;
+                              });
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                          ),
+
+                          const SizedBox(height: 20),
+
                           const Text(
                             'Alert delay',
                             style: TextStyle(fontSize: 25),
@@ -154,8 +215,7 @@ class _SettingsState extends State<Settings> {
                                   }
                                 : null,
                             contentPadding: EdgeInsets.zero,
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
+                            controlAffinity: ListTileControlAffinity.leading,
                           ),
 
                           RadioListTile<int>(
@@ -173,8 +233,7 @@ class _SettingsState extends State<Settings> {
                                   }
                                 : null,
                             contentPadding: EdgeInsets.zero,
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
+                            controlAffinity: ListTileControlAffinity.leading,
                           ),
 
                           RadioListTile<int>(
@@ -192,8 +251,7 @@ class _SettingsState extends State<Settings> {
                                   }
                                 : null,
                             contentPadding: EdgeInsets.zero,
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
+                            controlAffinity: ListTileControlAffinity.leading,
                           ),
 
                           RadioListTile<int>(
@@ -207,8 +265,7 @@ class _SettingsState extends State<Settings> {
                                   }
                                 : null,
                             contentPadding: EdgeInsets.zero,
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
+                            controlAffinity: ListTileControlAffinity.leading,
                             title: Row(
                               children: [
                                 const Text('Custom: '),
@@ -254,8 +311,7 @@ class _SettingsState extends State<Settings> {
                                   }
                                 : null,
                             contentPadding: EdgeInsets.zero,
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
+                            controlAffinity: ListTileControlAffinity.leading,
                           ),
 
                           RadioListTile<int>(
@@ -273,8 +329,7 @@ class _SettingsState extends State<Settings> {
                                   }
                                 : null,
                             contentPadding: EdgeInsets.zero,
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
+                            controlAffinity: ListTileControlAffinity.leading,
                           ),
 
                           RadioListTile<int>(
@@ -292,8 +347,7 @@ class _SettingsState extends State<Settings> {
                                   }
                                 : null,
                             contentPadding: EdgeInsets.zero,
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
+                            controlAffinity: ListTileControlAffinity.leading,
                           ),
 
                           RadioListTile<int>(
@@ -307,8 +361,7 @@ class _SettingsState extends State<Settings> {
                                   }
                                 : null,
                             contentPadding: EdgeInsets.zero,
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
+                            controlAffinity: ListTileControlAffinity.leading,
                             title: Row(
                               children: [
                                 const Text('Custom: '),
@@ -397,9 +450,11 @@ class SettingsResult {
     required this.alertDelaySeconds,
     required this.alertFrequencySeconds,
     required this.alertsEnabled,
+    required this.detectionMode,
   });
 
   final int alertDelaySeconds;
   final int alertFrequencySeconds;
   final bool alertsEnabled;
+  final String detectionMode;
 }
