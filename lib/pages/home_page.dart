@@ -156,28 +156,32 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<void> initNotifications() async {
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
+    try {
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
 
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
+      const iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
 
-    const initializationSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
+      const initializationSettings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      );
 
-    await notificationsPlugin.initialize(settings: initializationSettings);
+      await notificationsPlugin.initialize(settings: initializationSettings);
 
-    await notificationsPlugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
+      await notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.requestNotificationsPermission();
+    } catch (e) {
+      debugPrint('Notification initialization failed: $e');
+    }
   }
 
   Future<void> showBadPostureNotification() async {
@@ -1142,152 +1146,165 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     final scorePercent = dailyScore.round();
 
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 35, left: 25, right: 25),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height,
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 75,
-                    height: 40,
-                    child: FloatingActionButton.extended(
-                      onPressed: null,
-                      icon: const Icon(Icons.monetization_on_rounded),
-                      label: Text('$totalCoins'),
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      top: 35,
+                      left: 25,
+                      right: 25,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        SizedBox(
+                          width: 75,
+                          height: 40,
+                          child: FloatingActionButton.extended(
+                            onPressed: null,
+                            icon: const Icon(Icons.monetization_on_rounded),
+                            label: Text('$totalCoins'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: FloatingActionButton(
+                            onPressed: () async {
+                              final result = await Navigator.push<SettingsResult>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => Settings(
+                                    initialAlertDelaySeconds: alertDelaySeconds,
+                                    initialAlertFrequencySeconds:
+                                        alertFrequencySeconds,
+                                    initialAlertsEnabled: alertsEnabled,
+                                    initialDetectionMode: detectionMode,
+                                    onCalibrateNeutral: calibrateNeutral,
+                                  ),
+                                ),
+                              );
+
+                              if (result != null) {
+                                setState(() {
+                                  alertDelaySeconds = result.alertDelaySeconds;
+                                  alertFrequencySeconds =
+                                      result.alertFrequencySeconds;
+                                  alertsEnabled = result.alertsEnabled;
+                                  detectionMode = normaliseDetectionMode(
+                                    result.detectionMode,
+                                  );
+                                });
+
+                                await saveSettings();
+                                await manageCameraBasedOnPhoneAngle();
+                                updatePostureStatus();
+                              }
+                            },
+                            child: const Icon(Icons.settings),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: FloatingActionButton(
-                      onPressed: () async {
-                        final result = await Navigator.push<SettingsResult>(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => Settings(
-                              initialAlertDelaySeconds: alertDelaySeconds,
-                              initialAlertFrequencySeconds:
-                                  alertFrequencySeconds,
-                              initialAlertsEnabled: alertsEnabled,
-                              initialDetectionMode: detectionMode,
-                              onCalibrateNeutral: calibrateNeutral,
+                  const SizedBox(height: 10),
+                  const Text('STATUS', style: TextStyle(fontSize: 20)),
+                  Text(
+                    postureStatus,
+                    style: TextStyle(
+                      fontSize: 50,
+                      fontWeight: FontWeight.bold,
+                      color: getStatusColor(),
+                    ),
+                  ),
+                  Text('Score: $scorePercent', style: const TextStyle(fontSize: 18)),
+                  if (isMovingTooMuch)
+                    const Text('Movement detected — posture check paused')
+                  else if (cameraStatusMessage != null &&
+                      detectionMode != modePhoneOrientationOnly)
+                    Text(cameraStatusMessage!, style: const TextStyle(fontSize: 13)),
+                  const SizedBox(height: 20),
+                  Image.asset('images/happy slime.png', width: 300, height: 300),
+                  const SizedBox(height: 30),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.access_time_filled, size: 35),
+                      const SizedBox(width: 10),
+                      Text(
+                        formatTime(totalScreenTime),
+                        style: const TextStyle(fontSize: 20),
+                      ),
+                      const SizedBox(width: 100),
+                      const Icon(Icons.sentiment_dissatisfied_sharp, size: 35),
+                      const SizedBox(width: 10),
+                      Text(
+                        formatTime(totalBadPostureTime),
+                        style: const TextStyle(fontSize: 20),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 25),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 280,
+                          height: 60,
+                          child: FloatingActionButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const customizes(),
+                                ),
+                              );
+                            },
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(25),
+                            ),
+                            child: const Text(
+                              'CUSTOMIZE',
+                              style: TextStyle(fontSize: 25),
                             ),
                           ),
-                        );
-
-                        if (result != null) {
-                          setState(() {
-                            alertDelaySeconds = result.alertDelaySeconds;
-                            alertFrequencySeconds =
-                                result.alertFrequencySeconds;
-                            alertsEnabled = result.alertsEnabled;
-                            detectionMode = normaliseDetectionMode(
-                              result.detectionMode,
-                            );
-                          });
-
-                          await saveSettings();
-                          await manageCameraBasedOnPhoneAngle();
-                          updatePostureStatus();
-                        }
-                      },
-                      child: const Icon(Icons.settings),
+                        ),
+                        const SizedBox(width: 15),
+                        SizedBox(
+                          width: 60,
+                          height: 60,
+                          child: FloatingActionButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const Statistics(),
+                                ),
+                              );
+                            },
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(25),
+                            ),
+                            child: const Icon(Icons.equalizer),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 10),
-            const Text('STATUS', style: TextStyle(fontSize: 20)),
-            Text(
-              postureStatus,
-              style: TextStyle(
-                fontSize: 50,
-                fontWeight: FontWeight.bold,
-                color: getStatusColor(),
-              ),
-            ),
-            Text('Score: $scorePercent', style: const TextStyle(fontSize: 18)),
-            if (isMovingTooMuch)
-              const Text('Movement detected — posture check paused')
-            else if (cameraStatusMessage != null &&
-                detectionMode != modePhoneOrientationOnly)
-              Text(cameraStatusMessage!, style: const TextStyle(fontSize: 13)),
-            const SizedBox(height: 20),
-            Image.asset('images/happy slime.png', width: 300, height: 300),
-            const Spacer(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.access_time_filled, size: 35),
-                const SizedBox(width: 10),
-                Text(
-                  formatTime(totalScreenTime),
-                  style: const TextStyle(fontSize: 20),
-                ),
-                const SizedBox(width: 100),
-                const Icon(Icons.sentiment_dissatisfied_sharp, size: 35),
-                const SizedBox(width: 10),
-                Text(
-                  formatTime(totalBadPostureTime),
-                  style: const TextStyle(fontSize: 20),
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 25),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 280,
-                    height: 60,
-                    child: FloatingActionButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const customizes(),
-                          ),
-                        );
-                      },
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: const Text(
-                        'CUSTOMIZE',
-                        style: TextStyle(fontSize: 25),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  SizedBox(
-                    width: 60,
-                    height: 60,
-                    child: FloatingActionButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const Statistics(),
-                          ),
-                        );
-                      },
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: const Icon(Icons.equalizer),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
