@@ -7,12 +7,14 @@ class Settings extends StatefulWidget {
     required this.initialAlertFrequencySeconds,
     required this.initialAlertsEnabled,
     required this.initialDetectionMode,
+    required this.onCalibrateNeutral,
   });
 
   final int initialAlertDelaySeconds;
   final int initialAlertFrequencySeconds;
   final bool initialAlertsEnabled;
   final String initialDetectionMode;
+  final Future<bool> Function() onCalibrateNeutral;
 
   @override
   State<Settings> createState() => _SettingsState();
@@ -42,9 +44,7 @@ class _SettingsState extends State<Settings> {
       return modePhoneOrientationCamera;
     }
 
-    if (mode == modeCameraInAppOnly) {
-      return modePhoneOrientationCamera;
-    }
+    if (mode == modeCameraInAppOnly) return modeCameraInAppOnly;
 
     return modePhoneOrientationOnly;
   }
@@ -163,9 +163,7 @@ class _SettingsState extends State<Settings> {
 
                           RadioListTile<String>(
                             title: const Text('Phone orientation only'),
-                            subtitle: const Text(
-                              'Best for battery saving',
-                            ),
+                            subtitle: const Text('Best for battery saving'),
                             value: modePhoneOrientationOnly,
                             groupValue: detectionMode,
                             onChanged: (value) {
@@ -195,6 +193,32 @@ class _SettingsState extends State<Settings> {
 
                           const SizedBox(height: 20),
 
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Calibrate neutral'),
+                            subtitle: const Text(
+                              'Save your current phone angle as comfortable',
+                            ),
+                            trailing: const Icon(Icons.center_focus_strong),
+                            onTap: () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final saved = await widget.onCalibrateNeutral();
+                              if (mounted) {
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      saved
+                                          ? 'Neutral angle saved'
+                                          : 'Could not save neutral angle',
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+
+                          const SizedBox(height: 20),
+
                           const Text(
                             'Alert delay',
                             style: TextStyle(fontSize: 25),
@@ -209,8 +233,8 @@ class _SettingsState extends State<Settings> {
                                     setState(() {
                                       selectedDelayOption = value!;
                                       alertDelaySeconds = value;
-                                      customDelayController.text =
-                                          value.toString();
+                                      customDelayController.text = value
+                                          .toString();
                                     });
                                   }
                                 : null,
@@ -227,8 +251,8 @@ class _SettingsState extends State<Settings> {
                                     setState(() {
                                       selectedDelayOption = value!;
                                       alertDelaySeconds = value;
-                                      customDelayController.text =
-                                          value.toString();
+                                      customDelayController.text = value
+                                          .toString();
                                     });
                                   }
                                 : null,
@@ -245,8 +269,8 @@ class _SettingsState extends State<Settings> {
                                     setState(() {
                                       selectedDelayOption = value!;
                                       alertDelaySeconds = value;
-                                      customDelayController.text =
-                                          value.toString();
+                                      customDelayController.text = value
+                                          .toString();
                                     });
                                   }
                                 : null,
@@ -305,8 +329,8 @@ class _SettingsState extends State<Settings> {
                                     setState(() {
                                       selectedFrequencyOption = value!;
                                       alertFrequencySeconds = value;
-                                      customFrequencyController.text =
-                                          value.toString();
+                                      customFrequencyController.text = value
+                                          .toString();
                                     });
                                   }
                                 : null,
@@ -323,8 +347,8 @@ class _SettingsState extends State<Settings> {
                                     setState(() {
                                       selectedFrequencyOption = value!;
                                       alertFrequencySeconds = value;
-                                      customFrequencyController.text =
-                                          value.toString();
+                                      customFrequencyController.text = value
+                                          .toString();
                                     });
                                   }
                                 : null,
@@ -341,8 +365,8 @@ class _SettingsState extends State<Settings> {
                                     setState(() {
                                       selectedFrequencyOption = value!;
                                       alertFrequencySeconds = value;
-                                      customFrequencyController.text =
-                                          value.toString();
+                                      customFrequencyController.text = value
+                                          .toString();
                                     });
                                   }
                                 : null,
@@ -429,10 +453,7 @@ class _SettingsState extends State<Settings> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(25),
                       ),
-                      child: const Text(
-                        'Save',
-                        style: TextStyle(fontSize: 25),
-                      ),
+                      child: const Text('Save', style: TextStyle(fontSize: 25)),
                     ),
                   ),
                 ],
