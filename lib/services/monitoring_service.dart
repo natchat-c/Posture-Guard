@@ -16,6 +16,8 @@ import '../models/app_settings.dart';
 import '../models/calibration.dart';
 import 'notification_service.dart';
 import 'preferences_service.dart';
+import 'alert_mute_service.dart';
+import 'screen_state_service.dart';
 import 'statistics_repository.dart';
 
 const String _pendingStatsKey = 'pendingMonitoringStats';
@@ -43,6 +45,8 @@ class MonitoringService {
   MonitoringService._();
 
   static bool _initialized = false;
+  static Future<MonitoringActionResult>? _startInFlight;
+  static Future<MonitoringActionResult>? _stopInFlight;
 
   static bool get isSupported => Platform.isAndroid;
 
@@ -119,7 +123,22 @@ class MonitoringService {
     return FlutterForegroundTask.requestNotificationPermission();
   }
 
-  static Future<MonitoringActionResult> start() async {
+  static Future<MonitoringActionResult> start() {
+    final existing = _startInFlight;
+    if (existing != null) return existing;
+
+    late final Future<MonitoringActionResult> operation;
+    operation = _start().whenComplete(() {
+      if (identical(_startInFlight, operation)) _startInFlight = null;
+    });
+    _startInFlight = operation;
+    return operation;
+  }
+
+  static Future<MonitoringActionResult> _start() async {
+    final stopOperation = _stopInFlight;
+    if (stopOperation != null) await stopOperation;
+
     if (!isSupported) {
       return const MonitoringActionResult(
         success: false,
@@ -150,9 +169,6 @@ class MonitoringService {
       serviceTypes: const [ForegroundServiceTypes.specialUse],
       notificationTitle: 'Posture Guard is active',
       notificationText: 'Monitoring your phone angle',
-      notificationButtons: const [
-        NotificationButton(id: 'stop_monitoring', text: 'Stop'),
-      ],
       callback: startPostureMonitoringCallback,
     );
 
@@ -172,7 +188,22 @@ class MonitoringService {
     );
   }
 
-  static Future<MonitoringActionResult> stop() async {
+  static Future<MonitoringActionResult> stop() {
+    final existing = _stopInFlight;
+    if (existing != null) return existing;
+
+    late final Future<MonitoringActionResult> operation;
+    operation = _stop().whenComplete(() {
+      if (identical(_stopInFlight, operation)) _stopInFlight = null;
+    });
+    _stopInFlight = operation;
+    return operation;
+  }
+
+  static Future<MonitoringActionResult> _stop() async {
+    final startOperation = _startInFlight;
+    if (startOperation != null) await startOperation;
+
     if (!isSupported || !await isRunning()) {
       await PostureNotificationService.cancelPostureAlert();
       return const MonitoringActionResult(success: true, isRunning: false);
@@ -231,6 +262,11 @@ class MonitoringService {
   static void requestState() {
     if (!isSupported) return;
     FlutterForegroundTask.sendDataToTask(const {'command': 'state'});
+  }
+
+  static void alertMuteChanged() {
+    if (!isSupported) return;
+    FlutterForegroundTask.sendDataToTask(const {'command': 'alertMuteChanged'});
   }
 }
 
@@ -292,7 +328,16 @@ class _MutableStatsDelta {
 }
 
 class PostureMonitoringTaskHandler extends TaskHandler {
+  PostureMonitoringTaskHandler({
+    ScreenStateProvider? screenStateProvider,
+    AlertMuteController? alertMuteController,
+  }) : _screenStateProvider =
+           screenStateProvider ?? const AndroidScreenStateProvider(),
+       _alertMuteController = alertMuteController ?? AlertMuteController();
+
   final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
+  final ScreenStateProvider _screenStateProvider;
+  final AlertMuteController _alertMuteController;
   final PhoneAngleFilter _phoneAngleFilter = PhoneAngleFilter();
   final PostureHysteresis _hysteresis = PostureHysteresis();
   final PhoneMovementDetector _movementDetector = PhoneMovementDetector();
@@ -300,6 +345,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   final Map<String, _MutableStatsDelta> _pendingStats = {};
 
   StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
+  StreamSubscription<bool>? _screenStateSubscription;
   StatisticsRepository? _statisticsRepository;
   AppSettings _settings = AppSettings.defaults;
   Calibration? _calibration;
@@ -314,6 +360,11 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   bool _cameraSuggestsGoodPosture = false;
   bool _isMoving = false;
   bool _tickInProgress = false;
+  Future<void> _screenTransition = Future<void>.value();
+  bool _screenInteractive = true;
+  bool _alertsMuted = false;
+  bool _hasSensorReading = false;
+  int _alertEventSequence = 0;
   double _smoothedPhoneAngle = 0;
 
   @override
@@ -323,6 +374,10 @@ class PostureMonitoringTaskHandler extends TaskHandler {
     _settings =
         await SettingsRepository.loadCachedSettings(_preferences) ??
         AppSettings.defaults;
+    if (!_settings.monitoringEnabled) {
+      unawaited(FlutterForegroundTask.stopService());
+      return;
+    }
     _calibration = await CalibrationRepository.loadCachedCalibration(
       _preferences,
     );
@@ -350,11 +405,44 @@ class PostureMonitoringTaskHandler extends TaskHandler {
     }
 
     if (_calibration == null) {
-      _sendError('Calibration is missing. Open Posture Guard and calibrate.');
-      unawaited(FlutterForegroundTask.stopService());
-      return;
+      _calibration = const Calibration(neutralPhoneAngle: 0);
+      _sendError(
+        'Monitoring is using the standard phone-angle baseline. '
+        'Calibrate in Settings for personalized posture detection.',
+      );
     }
 
+    _screenInteractive = await _screenStateProvider.isInteractive();
+    _screenStateSubscription = _screenStateProvider.changes.listen(
+      (interactive) {
+        _screenTransition = _screenTransition
+            .then((_) => _setScreenInteractive(interactive))
+            .catchError((Object error, StackTrace stackTrace) {
+              debugPrint('Could not apply screen-state transition: $error');
+            });
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('Screen-state listener failed: $error');
+      },
+    );
+    _alertsMuted = await _alertMuteController.isMuted;
+    if (_screenInteractive) {
+      await _startSensorTracking();
+    } else {
+      await _updateForegroundNotification();
+    }
+
+    _lastTick = timestamp;
+    _sendState();
+  }
+
+  Future<void> _startSensorTracking() async {
+    if (_accelerometerSubscription != null ||
+        !_settings.monitoringEnabled ||
+        !_screenInteractive) {
+      return;
+    }
+    _hasSensorReading = false;
     try {
       _accelerometerSubscription = accelerometerEventStream().listen(
         _onAccelerometerEvent,
@@ -372,9 +460,49 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       );
       debugPrint('Could not start accelerometer service: $error');
     }
+  }
 
-    _lastTick = timestamp;
+  Future<void> _stopSensorTracking() async {
+    await _accelerometerSubscription?.cancel();
+    _accelerometerSubscription = null;
+    _hasSensorReading = false;
+  }
+
+  Future<void> _setScreenInteractive(bool interactive) async {
+    if (_screenInteractive == interactive) return;
+    _screenInteractive = interactive;
+    _lastTick = DateTime.now();
+    await _resetPostureEpisode();
+    if (interactive && _settings.monitoringEnabled) {
+      await _startSensorTracking();
+    } else {
+      await _stopSensorTracking();
+      _cameraAvailable = false;
+      _cameraSuggestsGoodPosture = false;
+    }
+    await _updateForegroundNotification();
     _sendState();
+  }
+
+  Future<void> _resetPostureEpisode() async {
+    _badPostureStart = null;
+    _alertScheduler.reset();
+    _postureStatus = 'GOOD';
+    _previousCountedStatus = null;
+    _isMoving = false;
+    _phoneAngleFilter.reset();
+    _hysteresis.reset();
+    _movementDetector.reset();
+    await PostureNotificationService.cancelPostureAlert();
+  }
+
+  Future<void> _updateForegroundNotification() async {
+    await FlutterForegroundTask.updateService(
+      notificationTitle: 'Posture Guard is active',
+      notificationText: _screenInteractive
+          ? 'Monitoring your phone angle'
+          : 'Paused while the screen is off',
+    );
   }
 
   void _onAccelerometerEvent(AccelerometerEvent event) {
@@ -382,6 +510,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       event.x * event.x + event.y * event.y + event.z * event.z,
     );
     if (gravity == 0) return;
+    _hasSensorReading = true;
 
     final ratio = (event.z.abs() / gravity).clamp(0.0, 1.0);
     final rawAngle = asin(ratio) * 180 / pi;
@@ -397,6 +526,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   }
 
   void _evaluatePosture() {
+    if (!_screenInteractive || !_hasSensorReading) return;
     final calibration = _calibration;
     if (calibration == null) return;
 
@@ -456,7 +586,12 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   }
 
   Future<void> _maybeAlert() async {
-    if (!_settings.alertsEnabled || _postureStatus != 'BAD') return;
+    if (!_settings.alertsEnabled ||
+        !_screenInteractive ||
+        _alertsMuted ||
+        _postureStatus != 'BAD') {
+      return;
+    }
 
     final now = DateTime.now();
     if (!_alertScheduler.isDue(
@@ -464,6 +599,8 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       postureIsBad: _postureStatus == 'BAD',
       alertsEnabled: _settings.alertsEnabled,
       frequencySeconds: _settings.alertFrequencySeconds,
+      screenInteractive: _screenInteractive,
+      temporarilyMuted: _alertsMuted,
     )) {
       return;
     }
@@ -472,6 +609,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       await PostureNotificationService.showPostureAlert();
       _alertScheduler.markAlertSent(now);
       _pendingForToday().alertsSent++;
+      _alertEventSequence++;
       _sendState();
     } catch (error) {
       _sendError(
@@ -493,7 +631,18 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   }
 
   Future<void> _tick(DateTime timestamp) async {
+    await _refreshMuteState();
+    if (!_screenInteractive) {
+      _lastTick = timestamp;
+      _sendState();
+      return;
+    }
     _evaluatePosture();
+    if (!_hasSensorReading) {
+      _lastTick = timestamp;
+      _sendState();
+      return;
+    }
 
     final previousTick = _lastTick;
     _lastTick = timestamp;
@@ -512,6 +661,14 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       await _savePendingStats();
       await _flushPendingStats();
     }
+    _sendState();
+  }
+
+  Future<void> _refreshMuteState() async {
+    final muted = await _alertMuteController.isMuted;
+    if (muted == _alertsMuted) return;
+    _alertsMuted = muted;
+    await _resetPostureEpisode();
     _sendState();
   }
 
@@ -608,6 +765,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
     }
 
     if (command == 'camera') {
+      if (!_screenInteractive) return;
       _cameraAvailable = data['available'] == true;
       _cameraSuggestsGoodPosture = data['suggestsGoodPosture'] == true;
       final milliseconds = (data['timestamp'] as num?)?.toInt();
@@ -629,6 +787,11 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       return;
     }
 
+    if (command == 'alertMuteChanged') {
+      unawaited(_reloadMuteAndResetEpisode());
+      return;
+    }
+
     if (command == 'state') _sendState();
   }
 
@@ -638,10 +801,19 @@ class PostureMonitoringTaskHandler extends TaskHandler {
     await _flushPendingStats();
   }
 
+  Future<void> _reloadMuteAndResetEpisode() async {
+    _alertsMuted = await _alertMuteController.isMuted;
+    await _resetPostureEpisode();
+    _sendState();
+  }
+
   void _sendState() {
     FlutterForegroundTask.sendDataToMain({
       'type': 'monitoringState',
       'active': true,
+      'screenInteractive': _screenInteractive,
+      'alertsMuted': _alertsMuted,
+      'alertEventSequence': _alertEventSequence,
       'postureStatus': _postureStatus,
       'phoneAngle': _smoothedPhoneAngle,
       'badPostureSeconds': _badPostureStart == null
@@ -658,14 +830,9 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   }
 
   @override
-  void onNotificationButtonPressed(String id) {
-    if (id == 'stop_monitoring') {
-      unawaited(FlutterForegroundTask.stopService());
-    }
-  }
-
-  @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    await _screenStateSubscription?.cancel();
+    _screenStateSubscription = null;
     await _accelerometerSubscription?.cancel();
     _accelerometerSubscription = null;
     await PostureNotificationService.cancelPostureAlert();

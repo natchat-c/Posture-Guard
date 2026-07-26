@@ -1,6 +1,21 @@
+import 'dart:ui';
 import 'dart:typed_data';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+import 'alert_mute_service.dart';
+
+@pragma('vm:entry-point')
+Future<void> handlePostureNotificationAction(
+  NotificationResponse response,
+) async {
+  DartPluginRegistrant.ensureInitialized();
+  if (response.actionId != PostureNotificationService.mute15MinutesActionId) {
+    return;
+  }
+  await AlertMuteController().muteFor();
+  await PostureNotificationService.cancelPostureAlert();
+}
 
 class PostureNotificationService {
   PostureNotificationService._();
@@ -9,6 +24,15 @@ class PostureNotificationService {
   static const int postureAlertNotificationId = 41002;
   static const String postureAlertChannelId = 'posture_alerts_v2';
   static const String postureAlertChannelName = 'Posture Alerts';
+  static const String mute15MinutesActionId = 'mute_15_minutes';
+  static const List<AndroidNotificationAction> postureAlertActions = [
+    AndroidNotificationAction(
+      mute15MinutesActionId,
+      'Mute for 15 min',
+      showsUserInterface: false,
+      cancelNotification: true,
+    ),
+  ];
 
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -26,7 +50,12 @@ class PostureNotificationService {
       ),
     );
 
-    await _plugin.initialize(settings: settings);
+    await _plugin.initialize(
+      settings: settings,
+      onDidReceiveNotificationResponse: handlePostureNotificationAction,
+      onDidReceiveBackgroundNotificationResponse:
+          handlePostureNotificationAction,
+    );
 
     const channel = AndroidNotificationChannel(
       postureAlertChannelId,
@@ -61,6 +90,7 @@ class PostureNotificationService {
       onlyAlertOnce: false,
       category: AndroidNotificationCategory.reminder,
       visibility: NotificationVisibility.public,
+      actions: postureAlertActions,
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -70,8 +100,9 @@ class PostureNotificationService {
 
     await _plugin.show(
       id: postureAlertNotificationId,
-      title: 'Straighten your posture',
-      body: 'Raise your phone and return to an upright position.',
+      title: 'Check your posture',
+      body:
+          'Your phone angle suggests poor posture. Adjust your position or mute alerts temporarily.',
       notificationDetails: NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,

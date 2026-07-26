@@ -8,8 +8,10 @@ class Customizes extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Column(
+      body: SafeArea(
+        child: ListView(
+          key: const Key('customizeScrollView'),
+          physics: const ClampingScrollPhysics(),
           children: [
             Padding(
               padding: const EdgeInsets.only(top: 45, left: 20),

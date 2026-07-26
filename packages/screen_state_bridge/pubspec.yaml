@@ -1,0 +1,19 @@
+name: screen_state_bridge
+description: Internal Android screen-interactive bridge for Posture Guard.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ^3.11.4
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.example.screen_state_bridge
+        pluginClass: ScreenStateBridgePlugin

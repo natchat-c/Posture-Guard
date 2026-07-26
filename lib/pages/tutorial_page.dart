@@ -43,10 +43,11 @@ class _TutorialPageState extends State<TutorialPage> {
           'Sit upright in a comfortable position and press Calibrate. This becomes your neutral phone position.',
     ),
     const _TutorialContent(
-      icon: Icons.play_circle_outline,
-      title: 'Start monitoring',
+      icon: Icons.toggle_on_outlined,
+      title: 'Automatic monitoring',
       text:
-          'Press Start Monitoring before leaving the app. A permanent notification means Posture Guard is monitoring your phone angle in the background.',
+          'Posture Guard starts monitoring after you press Get Started. '
+          'Use the master switch in Settings whenever you want to disable or enable it.',
     ),
     const _TutorialContent(
       icon: Icons.notifications_active_outlined,
@@ -112,11 +113,14 @@ class _TutorialPageState extends State<TutorialPage> {
               child: PageView.builder(
                 key: const Key('tutorialPageView'),
                 controller: _controller,
+                physics: const ClampingScrollPhysics(),
                 itemCount: _pages.length,
                 onPageChanged: (value) => setState(() => _page = value),
                 itemBuilder: (context, index) {
                   final content = _pages[index];
                   return SingleChildScrollView(
+                    key: Key('tutorialPageScroll$index'),
+                    physics: const ClampingScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(28, 48, 28, 24),
                     child: Column(
                       children: [

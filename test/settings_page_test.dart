@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:postureguard/models/app_settings.dart';
 import 'package:postureguard/pages/settings_page.dart';
+import 'package:postureguard/services/alert_mute_service.dart';
+import 'package:postureguard/services/device_screen_time_service.dart';
 import 'package:postureguard/services/preferences_service.dart';
+import 'package:postureguard/widgets/no_stretch_scroll_behavior.dart';
 
 class _FakeSettingsStore implements SettingsStore {
   _FakeSettingsStore(
@@ -32,29 +35,110 @@ class _FakeSettingsStore implements SettingsStore {
   }
 }
 
+class _FakeScreenTimeProvider extends DeviceScreenTimeProvider {
+  bool supported = true;
+  bool hasAccess = false;
+  int settingsOpens = 0;
+
+  @override
+  Future<bool> isSupported() async => supported;
+
+  @override
+  Future<bool> hasUsageAccess() async => hasAccess;
+
+  @override
+  Future<bool> openUsageAccessSettings() async {
+    settingsOpens++;
+    return supported;
+  }
+
+  @override
+  Future<int?> getScreenTimeSeconds({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    return hasAccess ? 100 : null;
+  }
+}
+
+class _FakeMuteStore implements AlertMuteStore {
+  int? value;
+
+  @override
+  Future<int?> readMutedUntilEpochMs() async => value;
+
+  @override
+  Future<void> writeMutedUntilEpochMs(int? epochMs) async => value = epochMs;
+}
+
 Widget _settingsApp(
   _FakeSettingsStore store, {
   Future<bool> Function()? loadMonitoringState,
-  Future<MonitoringControlResult> Function()? onStartMonitoring,
-  Future<MonitoringControlResult> Function()? onStopMonitoring,
+  Future<MonitoringControlResult> Function(bool enabled)?
+  onMonitoringEnabledChanged,
+  Future<void> Function(AppSettings settings)? onSettingsSaved,
+  Future<bool> Function()? onCalibrateNeutral,
+  DeviceScreenTimeProvider? screenTimeProvider,
+  AlertMuteController? alertMuteController,
+  VoidCallback? onAlertMuteChanged,
   bool initialHasCalibration = false,
 }) {
   return MaterialApp(
+    scrollBehavior: const NoStretchScrollBehavior(),
     home: Settings(
       store: store,
-      onCalibrateNeutral: () async => true,
+      onCalibrateNeutral: onCalibrateNeutral ?? () async => true,
       loadMonitoringState: loadMonitoringState,
-      onStartMonitoring: onStartMonitoring,
-      onStopMonitoring: onStopMonitoring,
+      onMonitoringEnabledChanged: onMonitoringEnabledChanged,
+      onSettingsSaved: onSettingsSaved,
+      screenTimeProvider: screenTimeProvider,
+      alertMuteController:
+          alertMuteController ??
+          AlertMuteController(
+            store: _FakeMuteStore(),
+            clock: () => DateTime(2026, 7, 26, 14, 30),
+          ),
+      onAlertMuteChanged: onAlertMuteChanged,
       initialHasCalibration: initialHasCalibration,
     ),
   );
 }
 
 void main() {
+  testWidgets('active temporary mute is compact and can be cleared', (
+    tester,
+  ) async {
+    final store = _FakeSettingsStore(AppSettings.defaults);
+    final muteStore = _FakeMuteStore()
+      ..value = DateTime(2026, 7, 26, 15).millisecondsSinceEpoch;
+    var now = DateTime(2026, 7, 26, 14, 30);
+    final controller = AlertMuteController(store: muteStore, clock: () => now);
+
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        alertMuteController: controller,
+        onAlertMuteChanged: () {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('temporaryAlertMuteStatus')), findsOneWidget);
+    expect(find.text('Unmute now'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('unmuteAlertsButton')));
+    await tester.pump();
+
+    expect(muteStore.value, isNull);
+    expect(find.byKey(const Key('temporaryAlertMuteStatus')), findsNothing);
+    expect(store.settings.alertsEnabled, isTrue);
+    now = now.add(const Duration(minutes: 1));
+  });
+
   testWidgets('loads existing values and keeps Save reachable', (tester) async {
     final store = _FakeSettingsStore(
       const AppSettings(
+        monitoringEnabled: true,
         alertDelaySeconds: 30,
         alertFrequencySeconds: 300,
         alertsEnabled: true,
@@ -75,6 +159,7 @@ void main() {
   ) async {
     final store = _FakeSettingsStore(
       const AppSettings(
+        monitoringEnabled: true,
         alertDelaySeconds: 10,
         alertFrequencySeconds: 15,
         alertsEnabled: true,
@@ -139,55 +224,85 @@ void main() {
     );
   });
 
-  testWidgets(
-    'shows only the appropriate monitoring action and blocks duplicate starts',
-    (tester) async {
-      final store = _FakeSettingsStore(AppSettings.defaults);
-      final startResult = Completer<MonitoringControlResult>();
-      var startCalls = 0;
+  testWidgets('master switch starts once and is disabled while in flight', (
+    tester,
+  ) async {
+    final store = _FakeSettingsStore(
+      AppSettings.defaults.copyWith(monitoringEnabled: false),
+    );
+    final startResult = Completer<MonitoringControlResult>();
+    var startCalls = 0;
 
-      await tester.pumpWidget(
-        _settingsApp(
-          store,
-          loadMonitoringState: () async => false,
-          onStartMonitoring: () {
-            startCalls++;
-            return startResult.future;
-          },
-          onStopMonitoring: () async => const MonitoringControlResult(
-            success: true,
-            isActive: false,
-            message: 'Monitoring stopped.',
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        loadMonitoringState: () async => false,
+        onMonitoringEnabledChanged: (enabled) {
+          startCalls++;
+          expect(enabled, isTrue);
+          return startResult.future;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Monitoring stopped'), findsOneWidget);
-      expect(find.text('Start Monitoring'), findsOneWidget);
-      expect(find.text('Stop Monitoring'), findsNothing);
+    expect(find.text('Start Monitoring'), findsNothing);
+    expect(find.text('Stop Monitoring'), findsNothing);
+    expect(find.text('Posture monitoring is disabled.'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('settingsMonitoringButton')));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('settingsMonitoringButton')));
-      expect(startCalls, 1);
+    await tester.tap(find.byKey(const Key('monitoringEnabledSwitch')));
+    await tester.pump();
+    var tile = tester.widget<SwitchListTile>(
+      find.byKey(const Key('monitoringEnabledSwitch')),
+    );
+    expect(tile.value, isTrue);
+    expect(tile.onChanged, isNull);
+    await tester.tap(find.byKey(const Key('monitoringEnabledSwitch')));
+    expect(startCalls, 1);
 
-      startResult.complete(
-        const MonitoringControlResult(
-          success: true,
-          isActive: true,
-          message: 'Monitoring started.',
-        ),
-      );
-      await tester.pumpAndSettle();
+    startResult.complete(
+      const MonitoringControlResult(
+        success: true,
+        isActive: true,
+        message: 'Monitoring started.',
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Monitoring active'), findsOneWidget);
-      expect(find.text('Stop Monitoring'), findsOneWidget);
-      expect(find.text('Start Monitoring'), findsNothing);
-    },
-  );
+    tile = tester.widget<SwitchListTile>(
+      find.byKey(const Key('monitoringEnabledSwitch')),
+    );
+    expect(tile.value, isTrue);
+    expect(find.text('Posture monitoring is active.'), findsOneWidget);
+    expect(store.savedSettings?.monitoringEnabled, isTrue);
+  });
 
-  testWidgets('reloads active service state and exposes recalibration', (
+  testWidgets('master switch stops monitoring once', (tester) async {
+    final store = _FakeSettingsStore(AppSettings.defaults);
+    var stopCalls = 0;
+
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        loadMonitoringState: () async => true,
+        onMonitoringEnabledChanged: (enabled) async {
+          stopCalls++;
+          expect(enabled, isFalse);
+          return const MonitoringControlResult(success: true, isActive: false);
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('monitoringEnabledSwitch')));
+    await tester.pumpAndSettle();
+
+    expect(stopCalls, 1);
+    expect(store.savedSettings?.monitoringEnabled, isFalse);
+    expect(find.text('Posture monitoring is disabled.'), findsOneWidget);
+  });
+
+  testWidgets('failed stop restores the accurate enabled state', (
     tester,
   ) async {
     final store = _FakeSettingsStore(AppSettings.defaults);
@@ -196,20 +311,224 @@ void main() {
       _settingsApp(
         store,
         loadMonitoringState: () async => true,
-        onStopMonitoring: () async =>
-            const MonitoringControlResult(success: true, isActive: false),
+        onMonitoringEnabledChanged: (enabled) async {
+          return const MonitoringControlResult(
+            success: false,
+            isActive: true,
+            message: 'Android could not stop monitoring.',
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('monitoringEnabledSwitch')));
+    await tester.pumpAndSettle();
+
+    final tile = tester.widget<SwitchListTile>(
+      find.byKey(const Key('monitoringEnabledSwitch')),
+    );
+    expect(tile.value, isTrue);
+    expect(store.savedSettings?.monitoringEnabled, isTrue);
+    expect(find.textContaining('could not stop'), findsOneWidget);
+  });
+
+  testWidgets('failed start returns the master switch to off', (tester) async {
+    final store = _FakeSettingsStore(
+      AppSettings.defaults.copyWith(monitoringEnabled: false),
+    );
+
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        loadMonitoringState: () async => false,
+        onMonitoringEnabledChanged: (enabled) async {
+          return const MonitoringControlResult(
+            success: false,
+            isActive: false,
+            message: 'Open Android settings and try again.',
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('monitoringEnabledSwitch')));
+    await tester.pumpAndSettle();
+
+    final tile = tester.widget<SwitchListTile>(
+      find.byKey(const Key('monitoringEnabledSwitch')),
+    );
+    expect(tile.value, isFalse);
+    expect(store.savedSettings?.monitoringEnabled, isFalse);
+    expect(find.textContaining('Open Android settings'), findsOneWidget);
+  });
+
+  testWidgets('cloud failure preserves the locally enabled master switch', (
+    tester,
+  ) async {
+    final store = _FakeSettingsStore(
+      AppSettings.defaults.copyWith(monitoringEnabled: false),
+      saveResult: const SettingsSaveResult(
+        savedLocally: true,
+        savedToFirebase: false,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        loadMonitoringState: () async => false,
+        onMonitoringEnabledChanged: (enabled) async =>
+            MonitoringControlResult(success: true, isActive: enabled),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('monitoringEnabledSwitch')));
+    await tester.pumpAndSettle();
+
+    final tile = tester.widget<SwitchListTile>(
+      find.byKey(const Key('monitoringEnabledSwitch')),
+    );
+    expect(tile.value, isTrue);
+    expect(store.savedSettings?.monitoringEnabled, isTrue);
+    expect(find.textContaining('cloud synchronization failed'), findsOneWidget);
+  });
+
+  testWidgets('alert switch saves and updates service without stopping it', (
+    tester,
+  ) async {
+    final store = _FakeSettingsStore(AppSettings.defaults);
+    AppSettings? communicatedSettings;
+    var monitoringActions = 0;
+
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        loadMonitoringState: () async => true,
+        onMonitoringEnabledChanged: (enabled) async {
+          monitoringActions++;
+          return MonitoringControlResult(success: true, isActive: enabled);
+        },
+        onSettingsSaved: (settings) async {
+          communicatedSettings = settings;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('alertsEnabledSwitch')));
+    await tester.pumpAndSettle();
+
+    expect(store.savedSettings?.alertsEnabled, isFalse);
+    expect(communicatedSettings?.alertsEnabled, isFalse);
+    expect(communicatedSettings?.monitoringEnabled, isTrue);
+    expect(monitoringActions, 0);
+  });
+
+  testWidgets('uses clamped scrolling and keeps lower controls reachable', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final store = _FakeSettingsStore(AppSettings.defaults);
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        loadMonitoringState: () async => true,
+        onMonitoringEnabledChanged: (enabled) async =>
+            MonitoringControlResult(success: true, isActive: enabled),
         initialHasCalibration: true,
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Monitoring active'), findsOneWidget);
-    expect(find.text('Stop Monitoring'), findsOneWidget);
-    expect(find.text('Start Monitoring'), findsNothing);
+    final listView = tester.widget<ListView>(
+      find.byKey(const Key('settingsScrollView')),
+    );
+    expect(listView.physics, isA<ClampingScrollPhysics>());
+    expect(find.byType(StretchingOverscrollIndicator), findsNothing);
+    expect(find.byKey(const Key('saveSettingsButton')), findsOneWidget);
+
     await tester.scrollUntilVisible(
       find.text('Recalibrate neutral posture'),
       300,
     );
     expect(find.text('Recalibrate neutral posture'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Usage Access is optional, user initiated, and rechecked', (
+    tester,
+  ) async {
+    final store = _FakeSettingsStore(AppSettings.defaults);
+    final provider = _FakeScreenTimeProvider();
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        screenTimeProvider: provider,
+        loadMonitoringState: () async => true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Use device screen time'), findsOneWidget);
+    expect(find.text('Usage Access not granted.'), findsOneWidget);
+    expect(
+      find.byKey(const Key('allowScreenTimeAccessButton')),
+      findsOneWidget,
+    );
+    expect(provider.settingsOpens, 0);
+
+    await tester.tap(find.byKey(const Key('allowScreenTimeAccessButton')));
+    await tester.pump();
+    expect(provider.settingsOpens, 1);
+
+    provider.hasAccess = true;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.text('Usage Access granted.'), findsOneWidget);
+    expect(find.byKey(const Key('allowScreenTimeAccessButton')), findsNothing);
+  });
+
+  testWidgets('recalibration preserves unrelated disabled settings', (
+    tester,
+  ) async {
+    final original = AppSettings.defaults.copyWith(
+      monitoringEnabled: false,
+      alertsEnabled: false,
+    );
+    final store = _FakeSettingsStore(original);
+    var calibrations = 0;
+
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        loadMonitoringState: () async => false,
+        onMonitoringEnabledChanged: (enabled) async =>
+            MonitoringControlResult(success: true, isActive: enabled),
+        onCalibrateNeutral: () async {
+          calibrations++;
+          return true;
+        },
+        initialHasCalibration: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Recalibrate neutral posture'),
+      300,
+    );
+
+    await tester.tap(find.text('Recalibrate neutral posture'));
+    await tester.pumpAndSettle();
+
+    expect(calibrations, 1);
+    expect(store.settings, original);
+    expect(store.savedSettings, isNull);
   });
 }

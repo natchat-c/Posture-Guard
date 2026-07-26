@@ -66,10 +66,13 @@ Future<void> saveTodayStats({
       totalBadPostureTime: totalBadPostureTime,
     );
 
-    await getTodayStatsRef().set({
+    await getTodayStatsRef().update({
       'date': getTodayKey(),
       'updatedAt': ServerValue.timestamp,
+      // Legacy totalScreenTimeSeconds remains monitored posture time.
+      'monitoredTimeSeconds': totalScreenTime,
       'totalScreenTimeSeconds': totalScreenTime,
+      'badPostureSeconds': totalBadPostureTime,
       'totalBadPostureSeconds': totalBadPostureTime,
       'goodPostureSeconds': goodPostureTime,
       'score': dailyScore.round(),

@@ -37,6 +37,7 @@ void main() {
   testWidgets('replay tutorial says Done and returns to previous page', (
     tester,
   ) async {
+    var completionCalls = 0;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -46,7 +47,12 @@ void main() {
                 Navigator.push<void>(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const TutorialPage(isReplay: true),
+                    builder: (context) => TutorialPage(
+                      isReplay: true,
+                      onCompleted: () async {
+                        completionCalls++;
+                      },
+                    ),
                   ),
                 );
               },
@@ -65,5 +71,6 @@ void main() {
     await tester.tap(find.byKey(const Key('tutorialNextButton')));
     await tester.pumpAndSettle();
     expect(find.text('Open help'), findsOneWidget);
+    expect(completionCalls, 0);
   });
 }

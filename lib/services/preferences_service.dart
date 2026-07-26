@@ -8,6 +8,7 @@ class PreferenceKeys {
   const PreferenceKeys._();
 
   static const String hasCachedSettings = 'hasCachedSettings';
+  static const String monitoringEnabled = 'monitoringEnabled';
   static const String alertDelaySeconds = 'alertDelaySeconds';
   static const String alertFrequencySeconds = 'alertFrequencySeconds';
   static const String alertsEnabled = 'alertsEnabled';
@@ -20,6 +21,7 @@ class PreferenceKeys {
   static const String notificationPermissionRequested =
       'notificationPermissionRequested';
   static const String cameraPermissionRequested = 'cameraPermissionRequested';
+  static const String alertsMutedUntilEpochMs = 'alertsMutedUntilEpochMs';
 }
 
 class SettingsLoadResult {
@@ -151,6 +153,9 @@ class SettingsRepository implements SettingsStore {
     }
 
     final data = <String, Object?>{
+      'monitoringEnabled': await preferences.getBool(
+        PreferenceKeys.monitoringEnabled,
+      ),
       'alertDelaySeconds': await preferences.getInt(
         PreferenceKeys.alertDelaySeconds,
       ),
@@ -166,6 +171,10 @@ class SettingsRepository implements SettingsStore {
     SharedPreferencesAsync preferences,
     AppSettings settings,
   ) async {
+    await preferences.setBool(
+      PreferenceKeys.monitoringEnabled,
+      settings.monitoringEnabled,
+    );
     await preferences.setInt(
       PreferenceKeys.alertDelaySeconds,
       settings.alertDelaySeconds,

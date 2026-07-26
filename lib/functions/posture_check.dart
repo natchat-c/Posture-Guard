@@ -14,6 +14,10 @@ class PhoneAngleFilter {
     _ema = _ema == null ? angle : alpha * angle + (1 - alpha) * _ema!;
     return _ema!;
   }
+
+  void reset() {
+    _ema = null;
+  }
 }
 
 class PostureHysteresis {
@@ -27,6 +31,10 @@ class PostureHysteresis {
     }
     return _breached;
   }
+
+  void reset() {
+    _breached = false;
+  }
 }
 
 class PostureAlertScheduler {
@@ -39,8 +47,15 @@ class PostureAlertScheduler {
     required bool postureIsBad,
     required bool alertsEnabled,
     required int frequencySeconds,
+    bool screenInteractive = true,
+    bool temporarilyMuted = false,
   }) {
-    if (!postureIsBad || !alertsEnabled) return false;
+    if (!postureIsBad ||
+        !alertsEnabled ||
+        !screenInteractive ||
+        temporarilyMuted) {
+      return false;
+    }
     return _lastAlert == null ||
         now.difference(_lastAlert!).inSeconds >= frequencySeconds;
   }
@@ -136,6 +151,11 @@ class PhoneMovementDetector {
     if (_changes.length < sampleCount) return false;
     return _changes.reduce((a, b) => a + b) / _changes.length >
         movementThreshold;
+  }
+
+  void reset() {
+    _changes.clear();
+    _previousAngle = null;
   }
 }
 

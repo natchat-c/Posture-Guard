@@ -1,5 +1,6 @@
 class AppSettings {
   const AppSettings({
+    required this.monitoringEnabled,
     required this.alertDelaySeconds,
     required this.alertFrequencySeconds,
     required this.alertsEnabled,
@@ -13,11 +14,13 @@ class AppSettings {
   static const int maximumAlertFrequencySeconds = 3600;
 
   static const AppSettings defaults = AppSettings(
+    monitoringEnabled: true,
     alertDelaySeconds: defaultAlertDelaySeconds,
     alertFrequencySeconds: defaultAlertFrequencySeconds,
     alertsEnabled: true,
   );
 
+  final bool monitoringEnabled;
   final int alertDelaySeconds;
   final int alertFrequencySeconds;
   final bool alertsEnabled;
@@ -43,9 +46,13 @@ class AppSettings {
   }) {
     final rawDelay = (data['alertDelaySeconds'] as num?)?.toInt();
     final rawFrequency = (data['alertFrequencySeconds'] as num?)?.toInt();
+    final rawMonitoringEnabled = data['monitoringEnabled'];
     final rawEnabled = data['alertsEnabled'];
 
     return AppSettings(
+      monitoringEnabled: rawMonitoringEnabled is bool
+          ? rawMonitoringEnabled
+          : fallback.monitoringEnabled,
       alertDelaySeconds: rawDelay != null && isValidAlertDelay(rawDelay)
           ? rawDelay
           : fallback.alertDelaySeconds,
@@ -59,6 +66,7 @@ class AppSettings {
 
   Map<String, Object> toMap() {
     return {
+      'monitoringEnabled': monitoringEnabled,
       'alertDelaySeconds': alertDelaySeconds,
       'alertFrequencySeconds': alertFrequencySeconds,
       'alertsEnabled': alertsEnabled,
@@ -66,11 +74,13 @@ class AppSettings {
   }
 
   AppSettings copyWith({
+    bool? monitoringEnabled,
     int? alertDelaySeconds,
     int? alertFrequencySeconds,
     bool? alertsEnabled,
   }) {
     return AppSettings(
+      monitoringEnabled: monitoringEnabled ?? this.monitoringEnabled,
       alertDelaySeconds: alertDelaySeconds ?? this.alertDelaySeconds,
       alertFrequencySeconds:
           alertFrequencySeconds ?? this.alertFrequencySeconds,
@@ -81,6 +91,7 @@ class AppSettings {
   @override
   bool operator ==(Object other) {
     return other is AppSettings &&
+        other.monitoringEnabled == monitoringEnabled &&
         other.alertDelaySeconds == alertDelaySeconds &&
         other.alertFrequencySeconds == alertFrequencySeconds &&
         other.alertsEnabled == alertsEnabled;
@@ -88,6 +99,11 @@ class AppSettings {
 
   @override
   int get hashCode {
-    return Object.hash(alertDelaySeconds, alertFrequencySeconds, alertsEnabled);
+    return Object.hash(
+      monitoringEnabled,
+      alertDelaySeconds,
+      alertFrequencySeconds,
+      alertsEnabled,
+    );
   }
 }

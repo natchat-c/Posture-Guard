@@ -13,6 +13,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../functions/posture_check.dart';
 import '../models/calibration.dart';
+import '../models/home_live_times.dart';
+import '../models/statistics_summary.dart';
+import '../services/device_screen_time_service.dart';
 import '../services/monitoring_service.dart';
 import '../services/preferences_service.dart';
 import '../services/statistics_repository.dart';
@@ -32,15 +35,21 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   static const double cameraStartAngle = 30;
   static const double cameraStopAngle = 25;
   static const Duration cameraDetectionInterval = Duration(milliseconds: 500);
+  static const Duration deviceScreenTimeRefreshInterval = Duration(minutes: 1);
 
   final SettingsRepository _settingsRepository = SettingsRepository();
   final CalibrationRepository _calibrationRepository = CalibrationRepository();
   final StatisticsRepository _statisticsRepository = StatisticsRepository();
   final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
   final CameraFrameStability _cameraFrameStability = CameraFrameStability();
+  final DeviceScreenTimeProvider _deviceScreenTimeProvider =
+      const AndroidDeviceScreenTimeProvider();
+  final PresentationTicker _presentationTicker = PresentationTicker();
+  late final HomeLiveTimes _liveTimes;
 
   StreamSubscription<DailyStats>? _statsSubscription;
   Timer? _serviceStateTimer;
+  Timer? _deviceScreenTimeRefreshTimer;
 
   Calibration? _calibration;
   DailyStats _stats = const DailyStats();
@@ -48,11 +57,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   bool _initializing = true;
   bool _monitoringActive = false;
+  bool _screenInteractive = true;
   bool _changingMonitoringState = false;
   String _postureStatus = 'GOOD';
   double _phoneAngle = 0;
   bool _hasPhoneAngle = false;
   String? _monitoringError;
+  bool _deviceScreenTimeSupported = false;
+  bool _hasUsageAccess = false;
+  int? _lastSavedDeviceScreenTime;
 
   int _totalCoins = 0;
   int _coinsEarnedToday = 0;
@@ -77,16 +90,26 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     return WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
   }
 
+  bool get _homeIsVisible {
+    return _appIsVisible && (ModalRoute.of(context)?.isCurrent ?? true);
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _liveTimes = HomeLiveTimes(dateKey: _activeDateKey);
     FlutterForegroundTask.addTaskDataCallback(_onServiceData);
     _subscribeToTodayStats();
     _initialize();
+    _presentationTicker.start(_onPresentationTick);
     _serviceStateTimer = Timer.periodic(
       const Duration(seconds: 3),
       (_) => _refreshServiceState(),
+    );
+    _deviceScreenTimeRefreshTimer = Timer.periodic(
+      deviceScreenTimeRefreshInterval,
+      (_) => unawaited(_refreshDeviceScreenTime()),
     );
   }
 
@@ -95,6 +118,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     final calibrationResult = await _calibrationRepository.load();
     await _loadCoinsAndAwardCompletedDays();
     await _refreshCameraPermissionStatus();
+    await _refreshDeviceScreenTime();
     final running = await MonitoringService.isRunning();
 
     if (!mounted) return;
@@ -119,12 +143,30 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   void _subscribeToTodayStats() {
     _statsSubscription?.cancel();
-    _activeDateKey = postureDateKey();
+    final nextDateKey = postureDateKey();
+    final changedDate = nextDateKey != _activeDateKey;
+    _activeDateKey = nextDateKey;
+    if (changedDate && mounted) {
+      setState(() {
+        _stats = const DailyStats();
+        _liveTimes
+          ..dateKey = nextDateKey
+          ..monitoredSeconds = 0
+          ..badPostureSeconds = 0
+          ..deviceScreenTimeSeconds = null;
+        _lastSavedDeviceScreenTime = null;
+      });
+    }
     _statsSubscription = _statisticsRepository
         .watch(_activeDateKey)
         .listen(
           (stats) {
-            if (mounted) setState(() => _stats = stats);
+            if (mounted) {
+              setState(() {
+                _stats = stats;
+                _liveTimes.reconcile(stats);
+              });
+            }
           },
           onError: (Object error, StackTrace stackTrace) {
             if (mounted) {
@@ -134,6 +176,60 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             }
           },
         );
+  }
+
+  void _onPresentationTick() {
+    if (!mounted) return;
+    final crossedMidnight = _liveTimes.advance(
+      now: DateTime.now(),
+      monitoringActive:
+          _monitoringActive && _screenInteractive && _homeIsVisible,
+      postureStatus: _postureStatus,
+      incrementDeviceScreenTime:
+          _deviceScreenTimeSupported && _hasUsageAccess && _homeIsVisible,
+    );
+    setState(() {});
+    if (crossedMidnight) {
+      _subscribeToTodayStats();
+      unawaited(_refreshDeviceScreenTime());
+      unawaited(_loadCoinsAndAwardCompletedDays());
+    }
+  }
+
+  Future<void> _refreshDeviceScreenTime() async {
+    final supported = await _deviceScreenTimeProvider.isSupported();
+    final hasAccess =
+        supported && await _deviceScreenTimeProvider.hasUsageAccess();
+    final seconds = hasAccess
+        ? await _deviceScreenTimeProvider.getTodayScreenTimeSeconds()
+        : null;
+    if (!mounted) return;
+    setState(() {
+      _deviceScreenTimeSupported = supported;
+      _hasUsageAccess = hasAccess;
+      if (seconds != null) _liveTimes.reconcileDeviceScreenTime(seconds);
+    });
+
+    if (seconds != null &&
+        (_lastSavedDeviceScreenTime == null ||
+            (seconds - _lastSavedDeviceScreenTime!).abs() >= 30)) {
+      _lastSavedDeviceScreenTime = seconds;
+      unawaited(
+        _statisticsRepository
+            .saveDeviceScreenTime(_activeDateKey, seconds)
+            .catchError((Object error) {
+              debugPrint('Could not save device screen time: $error');
+            }),
+      );
+    }
+  }
+
+  Future<void> _refreshPresentationSources() async {
+    final today = postureDateKey();
+    if (today != _activeDateKey) _subscribeToTodayStats();
+    await _refreshServiceState();
+    MonitoringService.requestState();
+    await _refreshDeviceScreenTime();
   }
 
   Future<void> _refreshServiceState() async {
@@ -179,6 +275,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     final angle = (data['phoneAngle'] as num?)?.toDouble();
     setState(() {
       _monitoringActive = active;
+      _screenInteractive = data['screenInteractive'] != false;
       _postureStatus = active
           ? data['postureStatus']?.toString() ?? 'GOOD'
           : 'GOOD';
@@ -202,7 +299,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     unawaited(
       _refreshCameraPermissionStatus().then((_) async {
         _cameraUnavailableForSession = false;
-        await _refreshServiceState();
+        await _refreshPresentationSources();
         await _manageCamera();
       }),
     );
@@ -219,15 +316,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         message: 'A monitoring action is already in progress.',
       );
     }
-    if (_calibration == null) {
-      return const MonitoringControlResult(
-        success: false,
-        isActive: false,
-        message:
-            'Calibration is required. Sit upright and calibrate your posture first.',
-      );
-    }
-
     setState(() {
       _changingMonitoringState = true;
       _monitoringError = null;
@@ -392,11 +480,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       MaterialPageRoute(
         builder: (context) => Settings(
           store: _settingsRepository,
+          screenTimeProvider: _deviceScreenTimeProvider,
           onCalibrateNeutral: _calibrateNeutral,
           initialHasCalibration: _calibration != null,
           loadMonitoringState: _loadMonitoringStateForSettings,
-          onStartMonitoring: _startMonitoring,
-          onStopMonitoring: _stopMonitoring,
+          onMonitoringEnabledChanged: (enabled) {
+            return enabled ? _startMonitoring() : _stopMonitoring();
+          },
           onSettingsSaved: (settings) async {
             MonitoringService.updateSettings(settings);
           },
@@ -407,7 +497,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     final result = await _settingsRepository.load();
     if (!mounted) return;
     MonitoringService.updateSettings(result.settings);
-    await _refreshServiceState();
+    await _refreshPresentationSources();
   }
 
   Future<bool> _loadMonitoringStateForSettings() async {
@@ -779,9 +869,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   String _formatTime(int seconds) {
-    final minutes = seconds ~/ 60;
-    final remaining = seconds % 60;
-    return minutes == 0 ? '${remaining}s' : '${minutes}m ${remaining}s';
+    return formatCompactDuration(seconds);
+  }
+
+  bool get _showDeviceScreenTime {
+    return _deviceScreenTimeSupported &&
+        _hasUsageAccess &&
+        _liveTimes.deviceScreenTimeSeconds != null;
   }
 
   Color _statusColor() {
@@ -799,6 +893,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     FlutterForegroundTask.removeTaskDataCallback(_onServiceData);
     _statsSubscription?.cancel();
     _serviceStateTimer?.cancel();
+    _deviceScreenTimeRefreshTimer?.cancel();
+    _presentationTicker.dispose();
     unawaited(_disposeCameraResources());
     super.dispose();
   }
@@ -818,203 +914,212 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     return Scaffold(
       body: SafeArea(
-        child: ScrollConfiguration(
-          behavior: const _HomeScrollBehavior(),
-          child: ListView(
-            physics: const ClampingScrollPhysics(),
-            padding: EdgeInsets.zero,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 35, left: 25, right: 25),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 75,
-                      height: 40,
-                      child: FloatingActionButton.extended(
-                        heroTag: 'homeCoinsButton',
-                        onPressed: null,
-                        icon: const Icon(Icons.monetization_on_rounded),
-                        label: Text('$_totalCoins'),
-                      ),
+        child: ListView(
+          key: const Key('homeScrollView'),
+          physics: const ClampingScrollPhysics(),
+          padding: EdgeInsets.zero,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 35, left: 25, right: 25),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 75,
+                    height: 40,
+                    child: FloatingActionButton.extended(
+                      heroTag: 'homeCoinsButton',
+                      onPressed: null,
+                      icon: const Icon(Icons.monetization_on_rounded),
+                      label: Text('$_totalCoins'),
                     ),
-                    const Spacer(),
-                    SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: FloatingActionButton(
-                        heroTag: 'homeHelpButton',
-                        tooltip: 'How to use Posture Guard',
-                        onPressed: () {
-                          Navigator.push<void>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const TutorialPage(isReplay: true),
-                            ),
-                          );
-                        },
-                        child: const Icon(Icons.help_outline),
-                      ),
+                  ),
+                  const Spacer(),
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: FloatingActionButton(
+                      heroTag: 'homeHelpButton',
+                      tooltip: 'How to use Posture Guard',
+                      onPressed: () async {
+                        await Navigator.push<void>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const TutorialPage(isReplay: true),
+                          ),
+                        );
+                        if (mounted) await _refreshPresentationSources();
+                      },
+                      child: const Icon(Icons.question_mark),
                     ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: FloatingActionButton(
-                        heroTag: 'homeSettingsButton',
-                        tooltip: 'Settings',
-                        onPressed: _openSettings,
-                        child: const Icon(Icons.settings),
-                      ),
+                  ),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: FloatingActionButton(
+                      heroTag: 'homeSettingsButton',
+                      tooltip: 'Settings',
+                      onPressed: _openSettings,
+                      child: const Icon(Icons.settings),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              const Text(
-                'STATUS',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 20),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'STATUS',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 20),
+            ),
+            Text(
+              _postureStatus,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 50,
+                fontWeight: FontWeight.bold,
+                color: _statusColor(),
               ),
+            ),
+            Text(
+              'Score: ${_stats.dailyScore.round()}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18),
+            ),
+            if (_cameraStatusMessage != null)
               Text(
-                _postureStatus,
+                _cameraStatusMessage!,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 50,
-                  fontWeight: FontWeight.bold,
-                  color: _statusColor(),
-                ),
+                style: const TextStyle(fontSize: 13),
               ),
-              Text(
-                'Score: ${_stats.dailyScore.round()}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 18),
-              ),
-              if (_cameraStatusMessage != null)
-                Text(
-                  _cameraStatusMessage!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13),
-                ),
-              const SizedBox(height: 20),
-              Image.asset('images/happy slime.png', width: 300, height: 300),
-              const SizedBox(height: 30),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.access_time_filled, size: 35),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: Text(
-                              _formatTime(_stats.totalScreenTime),
-                              style: const TextStyle(fontSize: 20),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.sentiment_dissatisfied_sharp,
-                            size: 35,
-                          ),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: Text(
-                              _formatTime(_stats.totalBadPostureTime),
-                              style: const TextStyle(fontSize: 20),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 30),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 25),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 60,
-                        child: FloatingActionButton(
-                          heroTag: 'homeCustomizeButton',
-                          onPressed: () {
-                            Navigator.push<void>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const Customizes(),
+            const SizedBox(height: 20),
+            Image.asset('images/happy slime.png', width: 300, height: 300),
+            const SizedBox(height: 30),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.access_time_filled, size: 35),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _showDeviceScreenTime
+                                    ? 'Device screen time'
+                                    : 'Monitored time',
+                                style: const TextStyle(fontSize: 11),
                               ),
-                            );
-                          },
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                          child: const Text(
-                            'CUSTOMIZE',
-                            style: TextStyle(fontSize: 25),
+                              Text(
+                                _formatTime(
+                                  _showDeviceScreenTime
+                                      ? _liveTimes.deviceScreenTimeSeconds!
+                                      : _liveTimes.monitoredSeconds,
+                                ),
+                                style: const TextStyle(fontSize: 20),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 15),
-                    SizedBox(
-                      width: 60,
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.sentiment_dissatisfied_sharp,
+                          size: 35,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Bad posture',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                              Text(
+                                _formatTime(_liveTimes.badPostureSeconds),
+                                style: const TextStyle(fontSize: 20),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 30),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 25),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
                       height: 60,
                       child: FloatingActionButton(
-                        heroTag: 'homeStatisticsButton',
-                        tooltip: 'Statistics',
-                        onPressed: () {
-                          Navigator.push<void>(
+                        heroTag: 'homeCustomizeButton',
+                        onPressed: () async {
+                          await Navigator.push<void>(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const Statistics(),
+                              builder: (context) => const Customizes(),
                             ),
                           );
+                          if (mounted) await _refreshPresentationSources();
                         },
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(25),
                         ),
-                        child: const Icon(Icons.equalizer),
+                        child: const Text(
+                          'CUSTOMIZE',
+                          style: TextStyle(fontSize: 25),
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 15),
+                  SizedBox(
+                    width: 60,
+                    height: 60,
+                    child: FloatingActionButton(
+                      heroTag: 'homeStatisticsButton',
+                      tooltip: 'Statistics',
+                      onPressed: () async {
+                        await Navigator.push<void>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => Statistics(
+                              screenTimeProvider: _deviceScreenTimeProvider,
+                            ),
+                          ),
+                        );
+                        if (mounted) await _refreshPresentationSources();
+                      },
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      child: const Icon(Icons.equalizer),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
-  }
-}
-
-class _HomeScrollBehavior extends MaterialScrollBehavior {
-  const _HomeScrollBehavior();
-
-  @override
-  Widget buildOverscrollIndicator(
-    BuildContext context,
-    Widget child,
-    ScrollableDetails details,
-  ) {
-    return child;
-  }
-
-  @override
-  ScrollPhysics getScrollPhysics(BuildContext context) {
-    return const ClampingScrollPhysics();
   }
 }

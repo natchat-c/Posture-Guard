@@ -12,35 +12,72 @@ String postureDateKey([DateTime? date]) {
 
 class DailyStats {
   const DailyStats({
-    this.totalScreenTime = 0,
-    this.totalBadPostureTime = 0,
+    int? monitoredTimeSeconds,
+    int? badPostureSeconds,
+    int? goodPostureSeconds,
+    this.deviceScreenTimeSeconds,
     this.badDetectionCount = 0,
     this.goodDetectionCount = 0,
     this.alertsSentCount = 0,
     this.cameraUnavailableCount = 0,
     this.movementPausedCount = 0,
-  });
+    int? totalScreenTime,
+    int? totalBadPostureTime,
+  }) : monitoredTimeSeconds = monitoredTimeSeconds ?? totalScreenTime ?? 0,
+       badPostureSeconds = badPostureSeconds ?? totalBadPostureTime ?? 0,
+       goodPostureSeconds =
+           goodPostureSeconds ??
+           ((monitoredTimeSeconds ?? totalScreenTime ?? 0) -
+               (badPostureSeconds ?? totalBadPostureTime ?? 0));
 
-  final int totalScreenTime;
-  final int totalBadPostureTime;
+  // Legacy totalScreenTimeSeconds means time monitored by Posture Guard. It is
+  // intentionally not redefined as Android device screen time.
+  final int monitoredTimeSeconds;
+  final int badPostureSeconds;
+  final int goodPostureSeconds;
+  final int? deviceScreenTimeSeconds;
   final int badDetectionCount;
   final int goodDetectionCount;
   final int alertsSentCount;
   final int cameraUnavailableCount;
   final int movementPausedCount;
 
+  int get totalScreenTime => monitoredTimeSeconds;
+
+  int get totalBadPostureTime => badPostureSeconds;
+
+  bool get hasTrackedPosture => monitoredTimeSeconds > 0;
+
   double get dailyScore {
-    if (totalScreenTime <= 0) return 100;
-    return (100 * (1 - totalBadPostureTime / totalScreenTime)).clamp(0, 100);
+    if (monitoredTimeSeconds <= 0) return 100;
+    return (100 * (1 - badPostureSeconds / monitoredTimeSeconds)).clamp(0, 100);
   }
 
   factory DailyStats.fromValue(Object? value) {
     if (value is! Map) return const DailyStats();
     final data = Map<dynamic, dynamic>.from(value);
+    final monitored =
+        (data['monitoredTimeSeconds'] as num?)?.toInt() ??
+        (data['totalScreenTimeSeconds'] as num?)?.toInt() ??
+        0;
+    final bad =
+        (data['badPostureSeconds'] as num?)?.toInt() ??
+        (data['totalBadPostureSeconds'] as num?)?.toInt() ??
+        0;
+    final rawDeviceScreenTime = data['deviceScreenTimeSeconds'];
+    final safeMonitored = max(0, monitored);
+    final safeBad = max(0, min(safeMonitored, bad));
+    final rawGood = (data['goodPostureSeconds'] as num?)?.toInt();
+    final safeGood = rawGood != null && rawGood >= 0 && rawGood <= safeMonitored
+        ? rawGood
+        : safeMonitored - safeBad;
     return DailyStats(
-      totalScreenTime: (data['totalScreenTimeSeconds'] as num?)?.toInt() ?? 0,
-      totalBadPostureTime:
-          (data['totalBadPostureSeconds'] as num?)?.toInt() ?? 0,
+      monitoredTimeSeconds: safeMonitored,
+      badPostureSeconds: safeBad,
+      goodPostureSeconds: safeGood,
+      deviceScreenTimeSeconds: rawDeviceScreenTime is num
+          ? max(0, rawDeviceScreenTime.toInt())
+          : null,
       badDetectionCount: (data['badDetectionCount'] as num?)?.toInt() ?? 0,
       goodDetectionCount: (data['goodDetectionCount'] as num?)?.toInt() ?? 0,
       alertsSentCount: (data['alertsSentCount'] as num?)?.toInt() ?? 0,
@@ -91,6 +128,10 @@ class StatisticsRepository {
     return _database.ref('users/demo_user/daily_stats/$dateKey');
   }
 
+  DatabaseReference get _allDailyStatsReference {
+    return _database.ref('users/demo_user/daily_stats');
+  }
+
   Stream<DailyStats> watch(String dateKey) {
     return referenceFor(
       dateKey,
@@ -100,6 +141,45 @@ class StatisticsRepository {
   Future<DailyStats> load(String dateKey) async {
     final snapshot = await referenceFor(dateKey).get();
     return DailyStats.fromValue(snapshot.value);
+  }
+
+  Stream<Map<String, DailyStats>> watchAll() {
+    return _allDailyStatsReference.onValue.map(
+      (event) => _recordsFromValue(event.snapshot.value),
+    );
+  }
+
+  Future<Map<String, DailyStats>> loadAll() async {
+    final snapshot = await _allDailyStatsReference.get();
+    return _recordsFromValue(snapshot.value);
+  }
+
+  Map<String, DailyStats> _recordsFromValue(Object? value) {
+    if (value is! Map) return const {};
+    final map = Map<dynamic, dynamic>.from(value);
+    if (map.containsKey('totalScreenTimeSeconds') ||
+        map.containsKey('monitoredTimeSeconds')) {
+      final dateKey = map['date']?.toString() ?? postureDateKey();
+      return {dateKey: DailyStats.fromValue(map)};
+    }
+
+    final records = <String, DailyStats>{};
+    for (final entry in map.entries) {
+      if (entry.value is! Map) continue;
+      records[entry.key.toString()] = DailyStats.fromValue(entry.value);
+    }
+    return records;
+  }
+
+  Future<void> saveDeviceScreenTime(
+    String dateKey,
+    int deviceScreenTimeSeconds,
+  ) async {
+    await referenceFor(dateKey).update({
+      'date': dateKey,
+      'deviceScreenTimeSeconds': max(0, deviceScreenTimeSeconds),
+      'updatedAt': ServerValue.timestamp,
+    });
   }
 
   Future<void> addDelta(String dateKey, StatsDelta delta) async {
@@ -116,14 +196,18 @@ class StatisticsRepository {
 
       final totalScreen = max(
         0,
-        ((data['totalScreenTimeSeconds'] as num?)?.toInt() ?? 0) +
+        ((data['monitoredTimeSeconds'] as num?)?.toInt() ??
+                (data['totalScreenTimeSeconds'] as num?)?.toInt() ??
+                0) +
             delta.screenSeconds,
       );
       final totalBad = min(
         totalScreen,
         max(
           0,
-          ((data['totalBadPostureSeconds'] as num?)?.toInt() ?? 0) +
+          ((data['badPostureSeconds'] as num?)?.toInt() ??
+                  (data['totalBadPostureSeconds'] as num?)?.toInt() ??
+                  0) +
               delta.badSeconds,
         ),
       );
@@ -135,7 +219,9 @@ class StatisticsRepository {
       data
         ..['date'] = dateKey
         ..['updatedAt'] = ServerValue.timestamp
+        ..['monitoredTimeSeconds'] = totalScreen
         ..['totalScreenTimeSeconds'] = totalScreen
+        ..['badPostureSeconds'] = totalBad
         ..['totalBadPostureSeconds'] = totalBad
         ..['goodPostureSeconds'] = good
         ..['score'] = score
