@@ -29,6 +29,31 @@ class PostureHysteresis {
   }
 }
 
+class PostureAlertScheduler {
+  DateTime? _lastAlert;
+
+  DateTime? get lastAlert => _lastAlert;
+
+  bool isDue({
+    required DateTime now,
+    required bool postureIsBad,
+    required bool alertsEnabled,
+    required int frequencySeconds,
+  }) {
+    if (!postureIsBad || !alertsEnabled) return false;
+    return _lastAlert == null ||
+        now.difference(_lastAlert!).inSeconds >= frequencySeconds;
+  }
+
+  void markAlertSent(DateTime timestamp) {
+    _lastAlert = timestamp;
+  }
+
+  void reset() {
+    _lastAlert = null;
+  }
+}
+
 class CameraFrameStability {
   CameraFrameStability({this.requiredValidFrames = 3, this.bufferSize = 5});
 

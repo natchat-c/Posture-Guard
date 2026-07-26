@@ -1,481 +1,493 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../models/app_settings.dart';
+import '../services/preferences_service.dart';
 
 class Settings extends StatefulWidget {
   const Settings({
     super.key,
-    required this.initialAlertDelaySeconds,
-    required this.initialAlertFrequencySeconds,
-    required this.initialAlertsEnabled,
-    required this.initialDetectionMode,
+    required this.store,
     required this.onCalibrateNeutral,
+    this.onSettingsSaved,
+    this.loadMonitoringState,
+    this.onStartMonitoring,
+    this.onStopMonitoring,
+    this.initialHasCalibration = false,
   });
 
-  final int initialAlertDelaySeconds;
-  final int initialAlertFrequencySeconds;
-  final bool initialAlertsEnabled;
-  final String initialDetectionMode;
+  final SettingsStore store;
   final Future<bool> Function() onCalibrateNeutral;
+  final Future<void> Function(AppSettings settings)? onSettingsSaved;
+  final Future<bool> Function()? loadMonitoringState;
+  final Future<MonitoringControlResult> Function()? onStartMonitoring;
+  final Future<MonitoringControlResult> Function()? onStopMonitoring;
+  final bool initialHasCalibration;
 
   @override
   State<Settings> createState() => _SettingsState();
 }
 
 class _SettingsState extends State<Settings> {
-  static const String modePhoneOrientationOnly = 'phone_orientation_only';
-  static const String modePhoneOrientationCamera = 'phone_orientation_camera';
-  static const String modeCameraInAppOnly = 'camera_in_app_only';
-
   static const int customOption = -1;
+  static const List<int> delayOptions = [10, 30, 60];
+  static const List<int> frequencyOptions = [15, 30, 60, 300];
 
-  late int alertDelaySeconds;
-  late int alertFrequencySeconds;
-  late bool alertsEnabled;
-  late String detectionMode;
-
-  late int selectedDelayOption;
-  late int selectedFrequencyOption;
-
-  final TextEditingController customDelayController = TextEditingController();
-  final TextEditingController customFrequencyController =
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _customDelayController = TextEditingController();
+  final TextEditingController _customFrequencyController =
       TextEditingController();
 
-  String normaliseDetectionMode(String mode) {
-    if (mode == modePhoneOrientationCamera) {
-      return modePhoneOrientationCamera;
-    }
-
-    if (mode == modeCameraInAppOnly) return modeCameraInAppOnly;
-
-    return modePhoneOrientationOnly;
-  }
+  AppSettings _settings = AppSettings.defaults;
+  int _selectedDelayOption = AppSettings.defaultAlertDelaySeconds;
+  int _selectedFrequencyOption = AppSettings.defaultAlertFrequencySeconds;
+  bool _loading = true;
+  bool _saving = false;
+  bool _monitoringActive = false;
+  bool _changingMonitoringState = false;
+  bool _calibrating = false;
+  late bool _hasCalibration;
+  String? _loadWarning;
 
   @override
   void initState() {
     super.initState();
+    _hasCalibration = widget.initialHasCalibration;
+    _load();
+  }
 
-    alertDelaySeconds = widget.initialAlertDelaySeconds;
-    alertFrequencySeconds = widget.initialAlertFrequencySeconds;
-    alertsEnabled = widget.initialAlertsEnabled;
-    detectionMode = normaliseDetectionMode(widget.initialDetectionMode);
+  Future<void> _load() async {
+    final result = await widget.store.load();
+    var monitoringActive = false;
+    String? monitoringWarning;
+    try {
+      monitoringActive = await widget.loadMonitoringState?.call() ?? false;
+    } catch (_) {
+      monitoringWarning = 'Could not confirm the monitoring service state.';
+    }
+    if (!mounted) return;
 
-    selectedDelayOption = [10, 30, 60].contains(alertDelaySeconds)
-        ? alertDelaySeconds
-        : customOption;
+    final settings = result.settings;
+    setState(() {
+      _settings = settings;
+      _selectedDelayOption = delayOptions.contains(settings.alertDelaySeconds)
+          ? settings.alertDelaySeconds
+          : customOption;
+      _selectedFrequencyOption =
+          frequencyOptions.contains(settings.alertFrequencySeconds)
+          ? settings.alertFrequencySeconds
+          : customOption;
+      _customDelayController.text = settings.alertDelaySeconds.toString();
+      _customFrequencyController.text = settings.alertFrequencySeconds
+          .toString();
+      _loadWarning = result.warning;
+      _monitoringActive = monitoringActive;
+      _loading = false;
+    });
 
-    selectedFrequencyOption = [60, 300, 600].contains(alertFrequencySeconds)
-        ? alertFrequencySeconds
-        : customOption;
-
-    customDelayController.text = alertDelaySeconds.toString();
-    customFrequencyController.text = alertFrequencySeconds.toString();
+    final warning = monitoringWarning ?? result.warning;
+    if (warning != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(warning)));
+    }
   }
 
   @override
   void dispose() {
-    customDelayController.dispose();
-    customFrequencyController.dispose();
+    _customDelayController.dispose();
+    _customFrequencyController.dispose();
     super.dispose();
   }
 
-  void saveAndGoBack() {
-    Navigator.pop(
-      context,
-      SettingsResult(
-        alertDelaySeconds: alertDelaySeconds,
-        alertFrequencySeconds: alertFrequencySeconds,
-        alertsEnabled: alertsEnabled,
-        detectionMode: normaliseDetectionMode(detectionMode),
-      ),
+  int? _parseCustom(TextEditingController controller, {required bool isDelay}) {
+    final value = int.tryParse(controller.text.trim());
+    if (value == null) return null;
+    final valid = isDelay
+        ? AppSettings.isValidAlertDelay(value)
+        : AppSettings.isValidAlertFrequency(value);
+    return valid ? value : null;
+  }
+
+  String? _validateCustom(
+    String? raw, {
+    required bool selected,
+    required bool isDelay,
+  }) {
+    if (!selected || !_settings.alertsEnabled) return null;
+    final value = int.tryParse(raw?.trim() ?? '');
+    if (value == null) return 'Enter a whole number.';
+
+    if (isDelay && !AppSettings.isValidAlertDelay(value)) {
+      return 'Use ${AppSettings.minimumAlertDelaySeconds}–${AppSettings.maximumAlertDelaySeconds} seconds.';
+    }
+    if (!isDelay && !AppSettings.isValidAlertFrequency(value)) {
+      return 'Use ${AppSettings.minimumAlertFrequencySeconds}–${AppSettings.maximumAlertFrequencySeconds} seconds.';
+    }
+    return null;
+  }
+
+  Future<void> _save() async {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
+
+    final delay = _selectedDelayOption == customOption
+        ? _parseCustom(_customDelayController, isDelay: true)
+        : _selectedDelayOption;
+    final frequency = _selectedFrequencyOption == customOption
+        ? _parseCustom(_customFrequencyController, isDelay: false)
+        : _selectedFrequencyOption;
+    if (delay == null || frequency == null) return;
+
+    final settings = AppSettings(
+      alertDelaySeconds: delay,
+      alertFrequencySeconds: frequency,
+      alertsEnabled: _settings.alertsEnabled,
     );
+
+    setState(() => _saving = true);
+    try {
+      final result = await widget.store.save(settings);
+      await widget.onSettingsSaved?.call(settings);
+      if (!mounted) return;
+
+      setState(() => _settings = settings);
+      if (result.succeeded) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Settings saved successfully.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Settings were saved on this device, but Firebase sync failed.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save settings: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
-  void updateCustomDelay(String value) {
-    final customValue = int.tryParse(value);
-
-    if (customValue == null || customValue <= 0) return;
-
-    setState(() {
-      selectedDelayOption = customOption;
-      alertDelaySeconds = customValue;
-    });
+  Future<void> _calibrate() async {
+    if (_calibrating) return;
+    setState(() => _calibrating = true);
+    try {
+      final saved = await widget.onCalibrateNeutral();
+      if (!mounted) return;
+      if (saved) setState(() => _hasCalibration = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            saved
+                ? 'Neutral posture saved.'
+                : 'Calibration failed. Hold the phone steady and try again.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _calibrating = false);
+    }
   }
 
-  void updateCustomFrequency(String value) {
-    final customValue = int.tryParse(value);
+  Future<void> _changeMonitoringState() async {
+    if (_changingMonitoringState) return;
+    final callback = _monitoringActive
+        ? widget.onStopMonitoring
+        : widget.onStartMonitoring;
+    if (callback == null) return;
 
-    if (customValue == null || customValue <= 0) return;
+    setState(() => _changingMonitoringState = true);
+    try {
+      final result = await callback();
+      if (!mounted) return;
+      setState(() => _monitoringActive = result.isActive);
+      if (result.message != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.message!)));
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not change monitoring state: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _changingMonitoringState = false);
+    }
+  }
 
-    setState(() {
-      selectedFrequencyOption = customOption;
-      alertFrequencySeconds = customValue;
-    });
+  DropdownMenuItem<int> _menuItem(int value, String label) {
+    return DropdownMenuItem<int>(value: value, child: Text(label));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.only(left: 20, right: 20, top: 20),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      height: 70,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          const Center(
-                            child: Text(
-                              'Settings',
-                              style: TextStyle(fontSize: 50),
-                            ),
-                          ),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: SizedBox(
-                              width: 40,
-                              height: 40,
-                              child: FloatingActionButton(
-                                heroTag: 'settingsBackButton',
-                                onPressed: saveAndGoBack,
-                                child: const Icon(Icons.arrow_back),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Detection mode',
-                            style: TextStyle(fontSize: 25),
-                          ),
-
-                          RadioListTile<String>(
-                            title: const Text('Phone orientation only'),
-                            subtitle: const Text('Best for battery saving'),
-                            value: modePhoneOrientationOnly,
-                            groupValue: detectionMode,
-                            onChanged: (value) {
-                              setState(() {
-                                detectionMode = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                          ),
-
-                          RadioListTile<String>(
-                            title: const Text('Phone orientation + camera'),
-                            subtitle: const Text(
-                              'Camera confirms posture when phone angle is bad',
-                            ),
-                            value: modePhoneOrientationCamera,
-                            groupValue: detectionMode,
-                            onChanged: (value) {
-                              setState(() {
-                                detectionMode = value!;
-                              });
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Calibrate neutral'),
-                            subtitle: const Text(
-                              'Save your current phone angle as comfortable',
-                            ),
-                            trailing: const Icon(Icons.center_focus_strong),
-                            onTap: () async {
-                              final messenger = ScaffoldMessenger.of(context);
-                              final saved = await widget.onCalibrateNeutral();
-                              if (mounted) {
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      saved
-                                          ? 'Neutral angle saved'
-                                          : 'Could not save neutral angle',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          const Text(
-                            'Alert delay',
-                            style: TextStyle(fontSize: 25),
-                          ),
-
-                          RadioListTile<int>(
-                            title: const Text('10 sec'),
-                            value: 10,
-                            groupValue: selectedDelayOption,
-                            onChanged: alertsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      selectedDelayOption = value!;
-                                      alertDelaySeconds = value;
-                                      customDelayController.text = value
-                                          .toString();
-                                    });
-                                  }
-                                : null,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                          ),
-
-                          RadioListTile<int>(
-                            title: const Text('30 sec'),
-                            value: 30,
-                            groupValue: selectedDelayOption,
-                            onChanged: alertsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      selectedDelayOption = value!;
-                                      alertDelaySeconds = value;
-                                      customDelayController.text = value
-                                          .toString();
-                                    });
-                                  }
-                                : null,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                          ),
-
-                          RadioListTile<int>(
-                            title: const Text('1 min'),
-                            value: 60,
-                            groupValue: selectedDelayOption,
-                            onChanged: alertsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      selectedDelayOption = value!;
-                                      alertDelaySeconds = value;
-                                      customDelayController.text = value
-                                          .toString();
-                                    });
-                                  }
-                                : null,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                          ),
-
-                          RadioListTile<int>(
-                            value: customOption,
-                            groupValue: selectedDelayOption,
-                            onChanged: alertsEnabled
-                                ? (value) {
-                                    updateCustomDelay(
-                                      customDelayController.text,
-                                    );
-                                  }
-                                : null,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: Row(
-                              children: [
-                                const Text('Custom: '),
-                                SizedBox(
-                                  width: 80,
-                                  child: TextField(
-                                    controller: customDelayController,
-                                    enabled: alertsEnabled,
-                                    keyboardType: TextInputType.number,
-                                    onTap: () {
-                                      setState(() {
-                                        selectedDelayOption = customOption;
-                                      });
-                                    },
-                                    onChanged: updateCustomDelay,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                const Text('sec'),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 25),
-
-                          const Text(
-                            'Alert frequency',
-                            style: TextStyle(fontSize: 25),
-                          ),
-
-                          RadioListTile<int>(
-                            title: const Text('1 min'),
-                            value: 60,
-                            groupValue: selectedFrequencyOption,
-                            onChanged: alertsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      selectedFrequencyOption = value!;
-                                      alertFrequencySeconds = value;
-                                      customFrequencyController.text = value
-                                          .toString();
-                                    });
-                                  }
-                                : null,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                          ),
-
-                          RadioListTile<int>(
-                            title: const Text('5 min'),
-                            value: 300,
-                            groupValue: selectedFrequencyOption,
-                            onChanged: alertsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      selectedFrequencyOption = value!;
-                                      alertFrequencySeconds = value;
-                                      customFrequencyController.text = value
-                                          .toString();
-                                    });
-                                  }
-                                : null,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                          ),
-
-                          RadioListTile<int>(
-                            title: const Text('10 min'),
-                            value: 600,
-                            groupValue: selectedFrequencyOption,
-                            onChanged: alertsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      selectedFrequencyOption = value!;
-                                      alertFrequencySeconds = value;
-                                      customFrequencyController.text = value
-                                          .toString();
-                                    });
-                                  }
-                                : null,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                          ),
-
-                          RadioListTile<int>(
-                            value: customOption,
-                            groupValue: selectedFrequencyOption,
-                            onChanged: alertsEnabled
-                                ? (value) {
-                                    updateCustomFrequency(
-                                      customFrequencyController.text,
-                                    );
-                                  }
-                                : null,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: Row(
-                              children: [
-                                const Text('Custom: '),
-                                SizedBox(
-                                  width: 80,
-                                  child: TextField(
-                                    controller: customFrequencyController,
-                                    enabled: alertsEnabled,
-                                    keyboardType: TextInputType.number,
-                                    onTap: () {
-                                      setState(() {
-                                        selectedFrequencyOption = customOption;
-                                      });
-                                    },
-                                    onChanged: updateCustomFrequency,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                const Text('sec'),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+      appBar: AppBar(title: const Text('Settings')),
+      bottomNavigationBar: _loading
+          ? null
+          : SafeArea(
+              minimum: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: FilledButton.icon(
+                key: const Key('saveSettingsButton'),
+                onPressed: _saving ? null : _save,
+                icon: _saving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(_saving ? 'Saving…' : 'Save settings'),
               ),
             ),
-
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-              child: Column(
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
                 children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: FloatingActionButton(
-                      heroTag: 'disableButton',
-                      onPressed: () {
-                        setState(() {
-                          alertsEnabled = !alertsEnabled;
-                        });
-                      },
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
+                  if (_loadWarning != null)
+                    Card(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(_loadWarning!),
                       ),
-                      child: Text(
-                        alertsEnabled ? 'Disable' : 'Enable',
-                        style: const TextStyle(fontSize: 25),
+                    ),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                _monitoringActive
+                                    ? Icons.sensors
+                                    : Icons.sensors_off,
+                                color: _monitoringActive
+                                    ? Colors.green
+                                    : Theme.of(context).colorScheme.outline,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _monitoringActive
+                                      ? 'Monitoring active'
+                                      : 'Monitoring stopped',
+                                  key: const Key('settingsMonitoringState'),
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            key: const Key('settingsMonitoringButton'),
+                            onPressed:
+                                _saving ||
+                                    _changingMonitoringState ||
+                                    (_monitoringActive
+                                        ? widget.onStopMonitoring == null
+                                        : widget.onStartMonitoring == null)
+                                ? null
+                                : _changeMonitoringState,
+                            icon: _changingMonitoringState
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Icon(
+                                    _monitoringActive
+                                        ? Icons.stop_circle_outlined
+                                        : Icons.play_circle_outline,
+                                  ),
+                            label: Text(
+                              _monitoringActive
+                                  ? 'Stop Monitoring'
+                                  : 'Start Monitoring',
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 10),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: FloatingActionButton(
-                      heroTag: 'saveButton',
-                      onPressed: saveAndGoBack,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: const Text('Save', style: TextStyle(fontSize: 25)),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Posture alerts'),
+                    subtitle: const Text(
+                      'Monitoring continues when alerts are disabled.',
                     ),
+                    value: _settings.alertsEnabled,
+                    onChanged: _saving
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _settings = _settings.copyWith(
+                                alertsEnabled: value,
+                              );
+                            });
+                          },
+                  ),
+                  const Divider(height: 32),
+                  Text(
+                    'Alert delay',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    key: const Key('alertDelayDropdown'),
+                    initialValue: _selectedDelayOption,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      helperText:
+                          'How long poor posture must continue before the first alert.',
+                    ),
+                    items: [
+                      _menuItem(10, '10 seconds'),
+                      _menuItem(30, '30 seconds'),
+                      _menuItem(60, '1 minute'),
+                      _menuItem(customOption, 'Custom'),
+                    ],
+                    onChanged: !_settings.alertsEnabled || _saving
+                        ? null
+                        : (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _selectedDelayOption = value;
+                              if (value != customOption) {
+                                _customDelayController.text = value.toString();
+                              }
+                            });
+                          },
+                  ),
+                  if (_selectedDelayOption == customOption) ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('customDelayField'),
+                      controller: _customDelayController,
+                      enabled: _settings.alertsEnabled && !_saving,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: 'Custom delay (seconds)',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) => _validateCustom(
+                        value,
+                        selected: _selectedDelayOption == customOption,
+                        isDelay: true,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 28),
+                  Text(
+                    'Alert frequency',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    key: const Key('alertFrequencyDropdown'),
+                    initialValue: _selectedFrequencyOption,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      helperText:
+                          'How often alerts repeat while posture remains poor.',
+                    ),
+                    items: [
+                      _menuItem(15, '15 seconds'),
+                      _menuItem(30, '30 seconds'),
+                      _menuItem(60, '1 minute'),
+                      _menuItem(300, '5 minutes'),
+                      _menuItem(customOption, 'Custom'),
+                    ],
+                    onChanged: !_settings.alertsEnabled || _saving
+                        ? null
+                        : (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _selectedFrequencyOption = value;
+                              if (value != customOption) {
+                                _customFrequencyController.text = value
+                                    .toString();
+                              }
+                            });
+                          },
+                  ),
+                  if (_selectedFrequencyOption == customOption) ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('customFrequencyField'),
+                      controller: _customFrequencyController,
+                      enabled: _settings.alertsEnabled && !_saving,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: 'Custom frequency (seconds)',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) => _validateCustom(
+                        value,
+                        selected: _selectedFrequencyOption == customOption,
+                        isDelay: false,
+                      ),
+                    ),
+                  ],
+                  const Divider(height: 36),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.center_focus_strong),
+                    title: Text(
+                      _hasCalibration
+                          ? 'Recalibrate neutral posture'
+                          : 'Calibrate neutral posture',
+                    ),
+                    subtitle: const Text(
+                      'Sit upright and save the current phone angle.',
+                    ),
+                    trailing: _calibrating
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_right),
+                    onTap: _saving || _calibrating ? null : _calibrate,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Posture Guard uses your camera only while the app is open '
+                    'to improve posture detection. When the app is closed or in '
+                    'the background, monitoring continues using your phone angle.',
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 }
 
-class SettingsResult {
-  const SettingsResult({
-    required this.alertDelaySeconds,
-    required this.alertFrequencySeconds,
-    required this.alertsEnabled,
-    required this.detectionMode,
+class MonitoringControlResult {
+  const MonitoringControlResult({
+    required this.success,
+    required this.isActive,
+    this.message,
   });
 
-  final int alertDelaySeconds;
-  final int alertFrequencySeconds;
-  final bool alertsEnabled;
-  final String detectionMode;
+  final bool success;
+  final bool isActive;
+  final String? message;
 }

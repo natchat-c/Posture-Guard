@@ -86,18 +86,19 @@ class Statistics extends StatelessWidget {
       if (isThisWeek) {
         final dayIndex = recordDay.difference(startOfWeek).inDays;
 
-        screenTimeByDay[dayIndex] =
-            _toInt(firebaseMap['totalScreenTimeSeconds']);
+        screenTimeByDay[dayIndex] = _toInt(
+          firebaseMap['totalScreenTimeSeconds'],
+        );
 
-        badPostureByDay[dayIndex] =
-            _toInt(firebaseMap['totalBadPostureSeconds']);
+        badPostureByDay[dayIndex] = _toInt(
+          firebaseMap['totalBadPostureSeconds'],
+        );
 
         scoreByDay[dayIndex] = _toInt(
           firebaseMap['scorePercent'] ?? firebaseMap['score'],
         ).toDouble();
       }
     }
-
     // Case 2:
     // Firebase stores many daily records.
     //
@@ -133,11 +134,9 @@ class Statistics extends StatelessWidget {
 
         final dayIndex = recordDay.difference(startOfWeek).inDays;
 
-        screenTimeByDay[dayIndex] =
-            _toInt(map['totalScreenTimeSeconds']);
+        screenTimeByDay[dayIndex] = _toInt(map['totalScreenTimeSeconds']);
 
-        badPostureByDay[dayIndex] =
-            _toInt(map['totalBadPostureSeconds']);
+        badPostureByDay[dayIndex] = _toInt(map['totalBadPostureSeconds']);
 
         scoreByDay[dayIndex] = _toInt(
           map['scorePercent'] ?? map['score'],
@@ -156,7 +155,9 @@ class Statistics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final databaseRef = FirebaseDatabase.instance.ref('users/demo_user/daily_stats');
+    final databaseRef = FirebaseDatabase.instance.ref(
+      'users/demo_user/daily_stats',
+    );
 
     return Scaffold(
       body: StreamBuilder<DatabaseEvent>(
@@ -172,9 +173,7 @@ class Statistics extends StatelessWidget {
           }
 
           if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           final stats = _calculateStats(snapshot.data!.snapshot);
@@ -205,10 +204,7 @@ class Statistics extends StatelessWidget {
                   alignment: Alignment.center,
                   children: [
                     const Center(
-                      child: Text(
-                        'Statistics',
-                        style: TextStyle(fontSize: 50),
-                      ),
+                      child: Text('Statistics', style: TextStyle(fontSize: 50)),
                     ),
                     Align(
                       alignment: Alignment.centerLeft,
@@ -234,10 +230,7 @@ class Statistics extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Today',
-                      style: TextStyle(fontSize: 25),
-                    ),
+                    const Text('Today', style: TextStyle(fontSize: 25)),
 
                     const SizedBox(height: 20),
 
@@ -263,10 +256,7 @@ class Statistics extends StatelessWidget {
 
                     const SizedBox(height: 20),
 
-                    const Text(
-                      'This week',
-                      style: TextStyle(fontSize: 25),
-                    ),
+                    const Text('This week', style: TextStyle(fontSize: 25)),
 
                     const SizedBox(height: 20),
 
@@ -378,8 +368,6 @@ class StatisticsData {
   double get score {
     if (totalScreenTime == 0) return 0;
 
-    return ((goodPostureTime / totalScreenTime) * 100)
-        .clamp(0, 100)
-        .toDouble();
+    return ((goodPostureTime / totalScreenTime) * 100).clamp(0, 100).toDouble();
   }
 }

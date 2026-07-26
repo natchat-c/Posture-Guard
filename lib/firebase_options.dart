@@ -46,7 +46,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '616136459870',
     projectId: 'posture-guard-ab657',
     authDomain: 'posture-guard-ab657.firebaseapp.com',
-    databaseURL: 'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'posture-guard-ab657.firebasestorage.app',
     measurementId: 'G-PP13JJ6QC8',
   );
@@ -56,7 +57,8 @@ class DefaultFirebaseOptions {
     appId: '1:616136459870:android:be980807d9dbad3de216cf',
     messagingSenderId: '616136459870',
     projectId: 'posture-guard-ab657',
-    databaseURL: 'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'posture-guard-ab657.firebasestorage.app',
   );
 
@@ -65,7 +67,8 @@ class DefaultFirebaseOptions {
     appId: '1:616136459870:ios:41b05d69081fa01ae216cf',
     messagingSenderId: '616136459870',
     projectId: 'posture-guard-ab657',
-    databaseURL: 'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'posture-guard-ab657.firebasestorage.app',
     iosBundleId: 'com.example.postureguard',
   );
@@ -75,7 +78,8 @@ class DefaultFirebaseOptions {
     appId: '1:616136459870:ios:41b05d69081fa01ae216cf',
     messagingSenderId: '616136459870',
     projectId: 'posture-guard-ab657',
-    databaseURL: 'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'posture-guard-ab657.firebasestorage.app',
     iosBundleId: 'com.example.postureguard',
   );
@@ -86,9 +90,9 @@ class DefaultFirebaseOptions {
     messagingSenderId: '616136459870',
     projectId: 'posture-guard-ab657',
     authDomain: 'posture-guard-ab657.firebaseapp.com',
-    databaseURL: 'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'posture-guard-ab657.firebasestorage.app',
     measurementId: 'G-Y8XG9KXT4J',
   );
-
 }

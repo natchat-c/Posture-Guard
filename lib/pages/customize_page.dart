@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'shop_page.dart';
 
-class customizes extends StatelessWidget {
-  const customizes({super.key});
+class Customizes extends StatelessWidget {
+  const Customizes({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +64,7 @@ class customizes extends StatelessWidget {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const shop()),
+                          MaterialPageRoute(builder: (context) => const Shop()),
                         );
                       },
                       shape: RoundedRectangleBorder(
@@ -85,4 +85,3 @@ class customizes extends StatelessWidget {
     );
   }
 }
-

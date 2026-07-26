@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 
 String getTodayKey() {
   final now = DateTime.now();
@@ -40,13 +41,12 @@ Future<Map<String, int>?> loadTodayStats() async {
     final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
 
     return {
-      'totalScreenTime':
-          (data['totalScreenTimeSeconds'] as num?)?.toInt() ?? 0,
+      'totalScreenTime': (data['totalScreenTimeSeconds'] as num?)?.toInt() ?? 0,
       'totalBadPostureTime':
           (data['totalBadPostureSeconds'] as num?)?.toInt() ?? 0,
     };
   } catch (e) {
-    print('Load Firebase error: $e');
+    debugPrint('Load Firebase error: $e');
     return null;
   }
 }
@@ -76,6 +76,6 @@ Future<void> saveTodayStats({
       'scorePercent': dailyScore.round(),
     });
   } catch (e) {
-    print('Save Firebase error: $e');
+    debugPrint('Save Firebase error: $e');
   }
 }
