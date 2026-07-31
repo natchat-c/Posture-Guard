@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:postureguard/models/app_settings.dart';
+import 'package:postureguard/models/calibration.dart';
 import 'package:postureguard/pages/settings_page.dart';
 import 'package:postureguard/services/alert_mute_service.dart';
 import 'package:postureguard/services/device_screen_time_service.dart';
@@ -81,6 +82,8 @@ Widget _settingsApp(
   DeviceScreenTimeProvider? screenTimeProvider,
   AlertMuteController? alertMuteController,
   VoidCallback? onAlertMuteChanged,
+  Calibration? initialCalibration,
+  Calibration? Function()? currentCalibration,
   bool initialHasCalibration = false,
 }) {
   return MaterialApp(
@@ -99,12 +102,89 @@ Widget _settingsApp(
             clock: () => DateTime(2026, 7, 26, 14, 30),
           ),
       onAlertMuteChanged: onAlertMuteChanged,
+      initialCalibration: initialCalibration,
+      currentCalibration: currentCalibration,
       initialHasCalibration: initialHasCalibration,
     ),
   );
 }
 
 void main() {
+  testWidgets(
+    'shows adaptive calibration diagnostics and updates immediately',
+    (tester) async {
+      final store = _FakeSettingsStore(AppSettings.defaults);
+      var calibration = const Calibration(neutralPhoneAngle: 90);
+      await tester.pumpWidget(
+        _settingsApp(
+          store,
+          initialCalibration: calibration,
+          currentCalibration: () => calibration,
+          onCalibrateNeutral: () async {
+            calibration = const Calibration(neutralPhoneAngle: 60);
+            return true;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('calibrationDiagnostics')),
+        300,
+      );
+
+      expect(find.textContaining('Neutral angle: 90\u00b0'), findsOneWidget);
+      expect(
+        find.textContaining('Bad posture below: 63\u00b0'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Recalibrate neutral posture'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Neutral angle: 60\u00b0'), findsOneWidget);
+      expect(
+        find.textContaining('Bad posture below: 42\u00b0'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Return to good above: 47\u00b0'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'failed recalibration preserves previous diagnostics and settings',
+    (tester) async {
+      final originalSettings = AppSettings.defaults.copyWith(
+        monitoringEnabled: false,
+        alertsEnabled: false,
+      );
+      final store = _FakeSettingsStore(originalSettings);
+      const calibration = Calibration(neutralPhoneAngle: 72);
+      await tester.pumpWidget(
+        _settingsApp(
+          store,
+          initialCalibration: calibration,
+          currentCalibration: () => calibration,
+          onCalibrateNeutral: () async => false,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Recalibrate neutral posture'),
+        300,
+      );
+
+      await tester.tap(find.text('Recalibrate neutral posture'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Neutral angle: 72\u00b0'), findsOneWidget);
+      expect(store.settings, originalSettings);
+      expect(store.savedSettings, isNull);
+    },
+  );
+
   testWidgets('active temporary mute is compact and can be cleared', (
     tester,
   ) async {

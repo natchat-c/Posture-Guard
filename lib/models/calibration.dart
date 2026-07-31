@@ -1,3 +1,5 @@
+import 'posture_thresholds.dart';
+
 class Calibration {
   const Calibration({required this.neutralPhoneAngle, this.neutralHeadX});
 
@@ -5,7 +7,7 @@ class Calibration {
   final double? neutralHeadX;
 
   static bool isValidPhoneAngle(double value) {
-    return value.isFinite && value >= 0 && value <= 90;
+    return isValidCalibrationPhoneAngle(value);
   }
 
   static bool isValidHeadAngle(double value) {

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -14,6 +13,7 @@ import '../firebase_options.dart';
 import '../functions/posture_check.dart';
 import '../models/app_settings.dart';
 import '../models/calibration.dart';
+import '../models/posture_thresholds.dart';
 import 'notification_service.dart';
 import 'preferences_service.dart';
 import 'alert_mute_service.dart';
@@ -405,7 +405,9 @@ class PostureMonitoringTaskHandler extends TaskHandler {
     }
 
     if (_calibration == null) {
-      _calibration = const Calibration(neutralPhoneAngle: 0);
+      _calibration = const Calibration(
+        neutralPhoneAngle: maximumSensorAngleDegrees,
+      );
       _sendError(
         'Monitoring is using the standard phone-angle baseline. '
         'Calibrate in Settings for personalized posture detection.',
@@ -491,6 +493,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
     _previousCountedStatus = null;
     _isMoving = false;
     _phoneAngleFilter.reset();
+    _hasSensorReading = false;
     _hysteresis.reset();
     _movementDetector.reset();
     await PostureNotificationService.cancelPostureAlert();
@@ -506,15 +509,16 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   }
 
   void _onAccelerometerEvent(AccelerometerEvent event) {
-    final gravity = sqrt(
-      event.x * event.x + event.y * event.y + event.z * event.z,
+    final rawAngle = phoneAngleFromAccelerometer(
+      x: event.x,
+      y: event.y,
+      z: event.z,
     );
-    if (gravity == 0) return;
+    if (rawAngle == null) return;
+    final smoothedAngle = _phoneAngleFilter.add(rawAngle);
+    if (smoothedAngle == null) return;
+    _smoothedPhoneAngle = smoothedAngle;
     _hasSensorReading = true;
-
-    final ratio = (event.z.abs() / gravity).clamp(0.0, 1.0);
-    final rawAngle = asin(ratio) * 180 / pi;
-    _smoothedPhoneAngle = _phoneAngleFilter.add(rawAngle);
 
     final wasMoving = _isMoving;
     _isMoving = _movementDetector.add(rawAngle);
@@ -535,11 +539,13 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       _badPostureStart = null;
       nextStatus = 'WARNING';
     } else {
-      final effectiveAngle = calibratedPhoneAngle(
-        _smoothedPhoneAngle,
+      final thresholds = calculatePostureThresholds(
         calibration.neutralPhoneAngle,
       );
-      final phoneAngleIsBad = _hysteresis.update(effectiveAngle);
+      final phoneAngleIsBad = _hysteresis.update(
+        _smoothedPhoneAngle,
+        thresholds,
+      );
       final cameraSignalIsFresh =
           _cameraAvailable &&
           _cameraSignalAt != null &&
@@ -757,9 +763,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
     if (command == 'calibration') {
       final angle = (data['neutralPhoneAngle'] as num?)?.toDouble();
       if (angle != null && Calibration.isValidPhoneAngle(angle)) {
-        _calibration = Calibration(neutralPhoneAngle: angle);
-        _badPostureStart = null;
-        _setPostureStatus('GOOD');
+        unawaited(_applyCalibration(Calibration(neutralPhoneAngle: angle)));
       }
       return;
     }
@@ -801,6 +805,12 @@ class PostureMonitoringTaskHandler extends TaskHandler {
     await _flushPendingStats();
   }
 
+  Future<void> _applyCalibration(Calibration calibration) async {
+    _calibration = calibration;
+    await _resetPostureEpisode();
+    _sendState();
+  }
+
   Future<void> _reloadMuteAndResetEpisode() async {
     _alertsMuted = await _alertMuteController.isMuted;
     await _resetPostureEpisode();
@@ -814,6 +824,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       'screenInteractive': _screenInteractive,
       'alertsMuted': _alertsMuted,
       'alertEventSequence': _alertEventSequence,
+      'hasSensorReading': _hasSensorReading,
       'postureStatus': _postureStatus,
       'phoneAngle': _smoothedPhoneAngle,
       'badPostureSeconds': _badPostureStart == null

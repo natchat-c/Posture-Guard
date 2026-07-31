@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../functions/posture_check.dart';
 import '../models/calibration.dart';
 import '../models/home_live_times.dart';
+import '../models/posture_thresholds.dart';
 import '../models/statistics_summary.dart';
 import '../services/device_screen_time_service.dart';
 import '../services/monitoring_service.dart';
@@ -32,8 +33,6 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
-  static const double cameraStartAngle = 30;
-  static const double cameraStopAngle = 25;
   static const Duration cameraDetectionInterval = Duration(milliseconds: 500);
   static const Duration deviceScreenTimeRefreshInterval = Duration(minutes: 1);
 
@@ -62,6 +61,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   String _postureStatus = 'GOOD';
   double _phoneAngle = 0;
   bool _hasPhoneAngle = false;
+  final List<({DateTime timestamp, double angle})> _recentPhoneAngles = [];
   String? _monitoringError;
   bool _deviceScreenTimeSupported = false;
   bool _hasUsageAccess = false;
@@ -273,15 +273,32 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (data['type'] != 'monitoringState') return;
     final active = data['active'] == true;
     final angle = (data['phoneAngle'] as num?)?.toDouble();
+    final hasSensorReading = data['hasSensorReading'] == true;
+    final screenInteractive = data['screenInteractive'] != false;
     setState(() {
       _monitoringActive = active;
-      _screenInteractive = data['screenInteractive'] != false;
+      _screenInteractive = screenInteractive;
       _postureStatus = active
           ? data['postureStatus']?.toString() ?? 'GOOD'
           : 'GOOD';
-      if (angle != null && angle.isFinite) {
+      if (angle != null &&
+          isValidSensorPhoneAngle(angle) &&
+          active &&
+          screenInteractive &&
+          hasSensorReading) {
         _phoneAngle = angle;
         _hasPhoneAngle = true;
+        final now = DateTime.now();
+        _recentPhoneAngles.add((timestamp: now, angle: angle));
+        _recentPhoneAngles.removeWhere(
+          (sample) => now.difference(sample.timestamp).inSeconds > 8,
+        );
+        if (_recentPhoneAngles.length > 8) {
+          _recentPhoneAngles.removeRange(0, _recentPhoneAngles.length - 8);
+        }
+      } else if (!screenInteractive || !active) {
+        _hasPhoneAngle = false;
+        _recentPhoneAngles.clear();
       }
       if (active) _monitoringError = null;
     });
@@ -405,7 +422,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   Future<bool> _calibrateNeutral() async {
     double? angle;
     if (_monitoringActive && _hasPhoneAngle) {
-      angle = _phoneAngle;
+      final now = DateTime.now();
+      final recent = _recentPhoneAngles
+          .where((sample) => now.difference(sample.timestamp).inSeconds <= 5)
+          .map((sample) => sample.angle);
+      angle = stablePhoneAngle(recent);
+      if (angle == null) {
+        _showMessage(
+          'Hold the phone steady in your viewing position for a few seconds, then try again.',
+        );
+        return false;
+      }
     } else if (_monitoringActive) {
       _showMessage(
         'Waiting for the orientation sensor. Hold the phone steady and try again.',
@@ -415,9 +442,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       angle = await _readCalibrationAngle();
     }
 
-    if (angle == null || !Calibration.isValidPhoneAngle(angle)) {
+    if (angle == null || !isValidSensorPhoneAngle(angle)) {
       _showMessage(
         'Calibration failed because a stable phone angle was not available.',
+      );
+      return false;
+    }
+    if (!isValidCalibrationPhoneAngle(angle)) {
+      _showMessage(
+        'Calibration needs a stable phone-angle reading. Hold the phone still in '
+        'your usual viewing position, then try again.',
       );
       return false;
     }
@@ -438,6 +472,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       setState(() {
         _calibration = calibration;
         _postureStatus = 'GOOD';
+        _recentPhoneAngles.clear();
       });
       MonitoringService.updateCalibration(calibration);
       if (!result.savedToFirebase) {
@@ -454,20 +489,22 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Future<double?> _readCalibrationAngle() async {
     final filter = PhoneAngleFilter();
-    double? latest;
+    final samples = <double>[];
     try {
       await for (final event
           in accelerometerEventStream()
-              .take(8)
+              .take(10)
               .timeout(const Duration(seconds: 4))) {
-        final gravity = sqrt(
-          event.x * event.x + event.y * event.y + event.z * event.z,
+        final rawAngle = phoneAngleFromAccelerometer(
+          x: event.x,
+          y: event.y,
+          z: event.z,
         );
-        if (gravity == 0) continue;
-        final ratio = (event.z.abs() / gravity).clamp(0.0, 1.0);
-        latest = filter.add(asin(ratio) * 180 / pi);
+        if (rawAngle == null) continue;
+        final smoothed = filter.add(rawAngle);
+        if (smoothed != null) samples.add(smoothed);
       }
-      return latest;
+      return stablePhoneAngle(samples);
     } catch (error) {
       debugPrint('Calibration sensor error: $error');
       return null;
@@ -482,6 +519,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           store: _settingsRepository,
           screenTimeProvider: _deviceScreenTimeProvider,
           onCalibrateNeutral: _calibrateNeutral,
+          initialCalibration: _calibration,
+          currentCalibration: () => _calibration,
           initialHasCalibration: _calibration != null,
           loadMonitoringState: _loadMonitoringStateForSettings,
           onMonitoringEnabledChanged: (enabled) {
@@ -551,6 +590,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     final allowed =
         _monitoringActive &&
         _appIsVisible &&
+        _screenInteractive &&
+        _hasPhoneAngle &&
         _cameraPermissionGranted &&
         calibration != null;
     if (!allowed) {
@@ -558,13 +599,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       return;
     }
 
-    final effectiveAngle = calibratedPhoneAngle(
-      _phoneAngle,
+    final thresholds = calculatePostureThresholds(
       calibration.neutralPhoneAngle,
     );
-    if (effectiveAngle >= cameraStartAngle && !_cameraActive) {
+    if (_phoneAngle <= thresholds.badEnterAngle && !_cameraActive) {
       await _startCamera();
-    } else if (effectiveAngle <= cameraStopAngle && _cameraActive) {
+    } else if (_phoneAngle >= thresholds.goodExitAngle && _cameraActive) {
       await _stopCamera();
     }
   }
@@ -736,13 +776,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
       final calibration = _calibration;
       if (calibration == null) return;
-      final effectivePhoneAngle = calibratedPhoneAngle(
-        _phoneAngle,
-        calibration.neutralPhoneAngle,
+      final phoneAngleDrop = max(
+        0.0,
+        calibration.neutralPhoneAngle - _phoneAngle,
       );
       final facingCamera = _headY == null || _headY!.abs() < 25;
       final headNotSideways = _headZ == null || _headZ!.abs() < 25;
-      var estimatedNeckFlexion = effectivePhoneAngle;
+      var estimatedNeckFlexion = phoneAngleDrop;
       if (_headX != null) {
         estimatedNeckFlexion += (_headX! - (calibration.neutralHeadX ?? 0))
             .abs();

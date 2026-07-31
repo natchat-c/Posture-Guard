@@ -2,7 +2,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'preferences_service.dart';
 
-const Duration postureAlertMuteDuration = Duration(minutes: 15);
+const Duration postureAlertMute15MinutesDuration = Duration(minutes: 15);
+const Duration postureAlertMute1HourDuration = Duration(hours: 1);
+const Duration postureAlertMuteDuration = postureAlertMute15MinutesDuration;
 
 abstract class AlertMuteStore {
   Future<int?> readMutedUntilEpochMs();

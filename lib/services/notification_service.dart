@@ -10,11 +10,26 @@ Future<void> handlePostureNotificationAction(
   NotificationResponse response,
 ) async {
   DartPluginRegistrant.ensureInitialized();
-  if (response.actionId != PostureNotificationService.mute15MinutesActionId) {
-    return;
-  }
-  await AlertMuteController().muteFor();
-  await PostureNotificationService.cancelPostureAlert();
+  await applyPostureNotificationAction(response.actionId);
+}
+
+Future<bool> applyPostureNotificationAction(
+  String? actionId, {
+  AlertMuteController? muteController,
+  Future<void> Function()? cancelNotification,
+}) async {
+  final duration = switch (actionId) {
+    PostureNotificationService.mute15MinutesActionId =>
+      postureAlertMute15MinutesDuration,
+    PostureNotificationService.mute1HourActionId =>
+      postureAlertMute1HourDuration,
+    _ => null,
+  };
+  if (duration == null) return false;
+
+  await (muteController ?? AlertMuteController()).muteFor(duration);
+  await (cancelNotification ?? PostureNotificationService.cancelPostureAlert)();
+  return true;
 }
 
 class PostureNotificationService {
@@ -25,10 +40,17 @@ class PostureNotificationService {
   static const String postureAlertChannelId = 'posture_alerts_v2';
   static const String postureAlertChannelName = 'Posture Alerts';
   static const String mute15MinutesActionId = 'mute_15_minutes';
+  static const String mute1HourActionId = 'mute_1_hour';
   static const List<AndroidNotificationAction> postureAlertActions = [
     AndroidNotificationAction(
       mute15MinutesActionId,
       'Mute for 15 min',
+      showsUserInterface: false,
+      cancelNotification: true,
+    ),
+    AndroidNotificationAction(
+      mute1HourActionId,
+      'Mute for 1 hour',
       showsUserInterface: false,
       cancelNotification: true,
     ),

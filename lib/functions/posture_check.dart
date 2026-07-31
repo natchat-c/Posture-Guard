@@ -1,8 +1,11 @@
 import 'dart:math' as math;
 
+import '../models/posture_thresholds.dart';
+
 const double defaultPhoneAngleEmaAlpha = 0.2;
-const double enterBadPhoneAngle = 30;
-const double returnGoodPhoneAngle = 25;
+const int minimumStableCalibrationSamples = 3;
+const int preferredCalibrationSamples = 5;
+const double maximumCalibrationSampleSpreadDegrees = 8;
 
 class PhoneAngleFilter {
   PhoneAngleFilter({this.alpha = defaultPhoneAngleEmaAlpha});
@@ -10,9 +13,12 @@ class PhoneAngleFilter {
   final double alpha;
   double? _ema;
 
-  double add(double angle) {
+  double? get value => _ema;
+
+  double? add(double angle) {
+    if (!isValidSensorPhoneAngle(angle)) return _ema;
     _ema = _ema == null ? angle : alpha * angle + (1 - alpha) * _ema!;
-    return _ema!;
+    return _ema;
   }
 
   void reset() {
@@ -23,10 +29,13 @@ class PhoneAngleFilter {
 class PostureHysteresis {
   bool _breached = false;
 
-  bool update(double calibratedAngle) {
+  bool get isBad => _breached;
+
+  bool update(double currentAngle, PostureThresholds thresholds) {
+    if (!isValidSensorPhoneAngle(currentAngle)) return _breached;
     if (_breached) {
-      if (calibratedAngle < returnGoodPhoneAngle) _breached = false;
-    } else if (calibratedAngle > enterBadPhoneAngle) {
+      if (currentAngle >= thresholds.goodExitAngle) _breached = false;
+    } else if (currentAngle <= thresholds.badEnterAngle) {
       _breached = true;
     }
     return _breached;
@@ -159,8 +168,42 @@ class PhoneMovementDetector {
   }
 }
 
-double calibratedPhoneAngle(double smoothedAngle, double neutralAngle) {
-  return math.max(0, smoothedAngle - neutralAngle);
+// The accelerometer angle is normalized to 0-90 degrees. A higher value means
+// the phone is held more upright from the ground; a flatter phone yields a lower angle.
+// abs(z) keeps portrait, upside-down portrait, and landscape from inverting it.
+double? phoneAngleFromAccelerometer({
+  required double x,
+  required double y,
+  required double z,
+}) {
+  if (!x.isFinite || !y.isFinite || !z.isFinite) return null;
+  final gravity = math.sqrt(x * x + y * y + z * z);
+  if (!gravity.isFinite || gravity <= 0) return null;
+  final ratio = (z.abs() / gravity).clamp(0.0, 1.0);
+  final angle = 90 - (math.asin(ratio) * 180 / math.pi);
+  return isValidSensorPhoneAngle(angle) ? angle : null;
+}
+
+double? stablePhoneAngle(Iterable<double> samples) {
+  final valid = samples.where(isValidSensorPhoneAngle).toList(growable: false);
+  if (valid.length < minimumStableCalibrationSamples) return null;
+
+  final recent = valid.length <= preferredCalibrationSamples
+      ? valid.toList()
+      : valid.sublist(valid.length - preferredCalibrationSamples);
+  recent.sort();
+  if (recent.last - recent.first > maximumCalibrationSampleSpreadDegrees) {
+    return null;
+  }
+  final stable = recent.length >= preferredCalibrationSamples
+      ? recent.sublist(1, recent.length - 1)
+      : recent;
+  return stable.reduce((a, b) => a + b) / stable.length;
+}
+
+double? stableCalibrationAngle(Iterable<double> samples) {
+  final angle = stablePhoneAngle(samples);
+  return angle != null && isValidCalibrationPhoneAngle(angle) ? angle : null;
 }
 
 // TODO: A future pass could add pose detection here to estimate neck and

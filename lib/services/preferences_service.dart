@@ -17,6 +17,8 @@ class PreferenceKeys {
   static const String neutralPhoneAngle = 'neutralPhoneAngle';
   static const String neutralHeadX = 'neutralHeadX';
   static const String calibrationPendingSync = 'calibrationPendingSync';
+  static const String calibrationUpdatedAtEpochMs =
+      'calibrationUpdatedAtEpochMs';
   static const String hasCompletedTutorial = 'hasCompletedTutorial';
   static const String notificationPermissionRequested =
       'notificationPermissionRequested';
@@ -214,11 +216,18 @@ class CalibrationRepository {
   CalibrationRepository({
     SharedPreferencesAsync? preferences,
     DatabaseReference? reference,
+    Future<Object?> Function()? remoteLoader,
+    Future<void> Function(Map<String, Object?> update)? remoteUpdater,
   }) : _preferences = preferences ?? SharedPreferencesAsync(),
-       _reference = reference;
+       _reference = reference,
+       _remoteLoader = remoteLoader,
+       _remoteUpdater = remoteUpdater;
 
   final SharedPreferencesAsync _preferences;
   final DatabaseReference? _reference;
+  final Future<Object?> Function()? _remoteLoader;
+  final Future<void> Function(Map<String, Object?> update)? _remoteUpdater;
+  static int _localWriteGeneration = 0;
 
   DatabaseReference get _settingsReference {
     return _reference ??
@@ -226,14 +235,21 @@ class CalibrationRepository {
   }
 
   Future<CalibrationLoadResult> load() async {
+    final loadGeneration = _localWriteGeneration;
     final cached = await loadCachedCalibration(_preferences);
+    final localRevision = await _preferences.getInt(
+      PreferenceKeys.calibrationUpdatedAtEpochMs,
+    );
     final hasPendingLocalSave =
         await _preferences.getBool(PreferenceKeys.calibrationPendingSync) ??
         false;
 
     if (cached != null && hasPendingLocalSave) {
       try {
-        await _syncCalibration(cached);
+        await _syncCalibration(
+          cached,
+          localRevision ?? DateTime.now().millisecondsSinceEpoch,
+        );
         await _preferences.setBool(
           PreferenceKeys.calibrationPendingSync,
           false,
@@ -249,18 +265,41 @@ class CalibrationRepository {
     }
 
     try {
-      final snapshot = await _settingsReference.get();
-      if (!snapshot.exists || snapshot.value == null) {
+      final remoteValue = _remoteLoader != null
+          ? await _remoteLoader()
+          : (await _settingsReference.get()).value;
+      if (remoteValue == null) {
         return CalibrationLoadResult(calibration: cached);
       }
 
-      final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
+      if (remoteValue is! Map) {
+        return CalibrationLoadResult(
+          calibration: cached,
+          warning: 'The saved calibration is invalid. Please calibrate again.',
+        );
+      }
+      final data = Map<dynamic, dynamic>.from(remoteValue);
+      final latestLocalRevision = await _preferences.getInt(
+        PreferenceKeys.calibrationUpdatedAtEpochMs,
+      );
+      if (latestLocalRevision != localRevision) {
+        return CalibrationLoadResult(
+          calibration: await loadCachedCalibration(_preferences),
+        );
+      }
       if (!data.containsKey('neutralPhoneAngle')) {
         return CalibrationLoadResult(calibration: cached);
       }
 
       final phoneAngle = (data['neutralPhoneAngle'] as num?)?.toDouble();
       final headAngle = (data['neutralHeadX'] as num?)?.toDouble();
+      final remoteRevision = (data['calibrationUpdatedAtEpochMs'] as num?)
+          ?.toInt();
+      if (cached != null &&
+          localRevision != null &&
+          (remoteRevision == null || remoteRevision < localRevision)) {
+        return CalibrationLoadResult(calibration: cached);
+      }
       if (phoneAngle == null || !Calibration.isValidPhoneAngle(phoneAngle)) {
         return CalibrationLoadResult(
           calibration: cached,
@@ -275,7 +314,16 @@ class CalibrationRepository {
             ? headAngle
             : null,
       );
-      await cacheCalibration(_preferences, calibration);
+      if (_localWriteGeneration != loadGeneration) {
+        return CalibrationLoadResult(
+          calibration: await loadCachedCalibration(_preferences),
+        );
+      }
+      await cacheCalibration(
+        _preferences,
+        calibration,
+        updatedAtEpochMs: remoteRevision,
+      );
       return CalibrationLoadResult(calibration: calibration);
     } catch (error) {
       return CalibrationLoadResult(
@@ -292,11 +340,22 @@ class CalibrationRepository {
       throw const FormatException('Calibration is invalid.');
     }
 
-    await cacheCalibration(_preferences, calibration);
+    final previousRevision = await _preferences.getInt(
+      PreferenceKeys.calibrationUpdatedAtEpochMs,
+    );
+    final nowRevision = DateTime.now().millisecondsSinceEpoch;
+    final revision = previousRevision != null && previousRevision >= nowRevision
+        ? previousRevision + 1
+        : nowRevision;
+    await cacheCalibration(
+      _preferences,
+      calibration,
+      updatedAtEpochMs: revision,
+    );
     await _preferences.setBool(PreferenceKeys.calibrationPendingSync, true);
 
     try {
-      await _syncCalibration(calibration);
+      await _syncCalibration(calibration, revision);
       await _preferences.setBool(PreferenceKeys.calibrationPendingSync, false);
       return const CalibrationSaveResult(
         savedLocally: true,
@@ -311,15 +370,20 @@ class CalibrationRepository {
     }
   }
 
-  Future<void> _syncCalibration(Calibration calibration) async {
+  Future<void> _syncCalibration(Calibration calibration, int revision) async {
     final update = <String, Object?>{
       'neutralPhoneAngle': calibration.neutralPhoneAngle,
+      'calibrationUpdatedAtEpochMs': revision,
       'updatedAt': ServerValue.timestamp,
     };
     if (calibration.neutralHeadX != null) {
       update['neutralHeadX'] = calibration.neutralHeadX;
     }
-    await _settingsReference.update(update);
+    if (_remoteUpdater case final updater?) {
+      await updater(update);
+    } else {
+      await _settingsReference.update(update);
+    }
   }
 
   static Future<Calibration?> loadCachedCalibration(
@@ -347,8 +411,10 @@ class CalibrationRepository {
 
   static Future<void> cacheCalibration(
     SharedPreferencesAsync preferences,
-    Calibration calibration,
-  ) async {
+    Calibration calibration, {
+    int? updatedAtEpochMs,
+  }) async {
+    _localWriteGeneration++;
     await preferences.setDouble(
       PreferenceKeys.neutralPhoneAngle,
       calibration.neutralPhoneAngle,
@@ -360,6 +426,12 @@ class CalibrationRepository {
       );
     }
     await preferences.setBool(PreferenceKeys.hasCalibration, true);
+    if (updatedAtEpochMs != null) {
+      await preferences.setInt(
+        PreferenceKeys.calibrationUpdatedAtEpochMs,
+        updatedAtEpochMs,
+      );
+    }
   }
 }
 

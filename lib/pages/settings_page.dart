@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/app_settings.dart';
+import '../models/calibration.dart';
+import '../models/posture_thresholds.dart';
 import '../services/alert_mute_service.dart';
 import '../services/device_screen_time_service.dart';
 import '../services/monitoring_service.dart';
@@ -20,6 +22,8 @@ class Settings extends StatefulWidget {
     this.screenTimeProvider,
     this.alertMuteController,
     this.onAlertMuteChanged,
+    this.initialCalibration,
+    this.currentCalibration,
     this.initialHasCalibration = false,
   });
 
@@ -32,6 +36,8 @@ class Settings extends StatefulWidget {
   final DeviceScreenTimeProvider? screenTimeProvider;
   final AlertMuteController? alertMuteController;
   final VoidCallback? onAlertMuteChanged;
+  final Calibration? initialCalibration;
+  final Calibration? Function()? currentCalibration;
   final bool initialHasCalibration;
 
   @override
@@ -58,6 +64,7 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
   bool _changingMonitoringState = false;
   bool _calibrating = false;
   late bool _hasCalibration;
+  Calibration? _calibration;
   String? _loadWarning;
   late final DeviceScreenTimeProvider _screenTimeProvider;
   bool _screenTimeSupported = false;
@@ -74,7 +81,8 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
     _screenTimeProvider =
         widget.screenTimeProvider ?? const AndroidDeviceScreenTimeProvider();
     _alertMuteController = widget.alertMuteController ?? AlertMuteController();
-    _hasCalibration = widget.initialHasCalibration;
+    _calibration = widget.initialCalibration;
+    _hasCalibration = widget.initialHasCalibration || _calibration != null;
     _load();
     _refreshUsageAccess();
     _refreshAlertMute();
@@ -266,7 +274,12 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
     try {
       final saved = await widget.onCalibrateNeutral();
       if (!mounted) return;
-      if (saved) setState(() => _hasCalibration = true);
+      if (saved) {
+        setState(() {
+          _hasCalibration = true;
+          _calibration = widget.currentCalibration?.call() ?? _calibration;
+        });
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -658,8 +671,15 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
                           ? 'Recalibrate neutral posture'
                           : 'Calibrate neutral posture',
                     ),
-                    subtitle: const Text(
-                      'Sit upright and save the current phone angle.',
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Sit upright and save the current phone angle.',
+                        ),
+                        const SizedBox(height: 6),
+                        _calibrationDetails(),
+                      ],
                     ),
                     trailing: _calibrating
                         ? const SizedBox.square(
@@ -678,6 +698,22 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _calibrationDetails() {
+    final calibration = _calibration;
+    if (calibration == null || !calibration.isValid) {
+      return const Text('Not calibrated', key: Key('calibrationDiagnostics'));
+    }
+    final thresholds = calculatePostureThresholds(
+      calibration.neutralPhoneAngle,
+    );
+    return Text(
+      'Neutral angle: ${calibration.neutralPhoneAngle.round()}\u00b0\n'
+      'Bad posture below: ${thresholds.badEnterAngle.round()}\u00b0\n'
+      'Return to good above: ${thresholds.goodExitAngle.round()}\u00b0',
+      key: const Key('calibrationDiagnostics'),
     );
   }
 }
