@@ -130,7 +130,7 @@ void main() {
       const Offset(-700, 0),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Calibrate your posture'), findsOneWidget);
+    expect(find.text('Set your normal position'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

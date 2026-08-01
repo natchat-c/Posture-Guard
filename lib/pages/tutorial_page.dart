@@ -1,74 +1,41 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/locale_controller.dart';
+import '../services/calibration_service.dart';
+
 class TutorialPage extends StatefulWidget {
-  const TutorialPage({super.key, this.isReplay = false, this.onCompleted});
+  const TutorialPage({
+    super.key,
+    this.isReplay = false,
+    this.onCompleted,
+    this.calibrationService,
+  });
 
   final bool isReplay;
   final Future<void> Function()? onCompleted;
+  final PostureCalibrationService? calibrationService;
 
   @override
   State<TutorialPage> createState() => _TutorialPageState();
 }
 
-class _TutorialContent {
-  const _TutorialContent({
-    required this.icon,
-    required this.title,
-    required this.text,
-    this.extra,
-  });
-
-  final IconData icon;
-  final String title;
-  final String text;
-  final Widget? extra;
-}
-
 class _TutorialPageState extends State<TutorialPage> {
-  final PageController _controller = PageController();
-  int _page = 0;
-  bool _finishing = false;
+  static const int _pageCount = 3;
 
-  late final List<_TutorialContent> _pages = [
-    const _TutorialContent(
-      icon: Icons.health_and_safety_outlined,
-      title: 'Welcome to Posture Guard',
-      text:
-          'Posture Guard helps you notice when you hold your phone at an unhealthy angle.',
-    ),
-    const _TutorialContent(
-      icon: Icons.center_focus_strong,
-      title: 'Calibrate your posture',
-      text:
-          'Sit upright in a comfortable position and press Calibrate. This becomes your neutral phone position.',
-    ),
-    const _TutorialContent(
-      icon: Icons.toggle_on_outlined,
-      title: 'Automatic monitoring',
-      text:
-          'Posture Guard starts monitoring after you press Get Started. '
-          'Use the master switch in Settings whenever you want to disable or enable it.',
-    ),
-    const _TutorialContent(
-      icon: Icons.notifications_active_outlined,
-      title: 'Receive posture alerts',
-      text:
-          'If poor posture continues for several seconds, your phone will vibrate and send a notification. Alerts will continue until your posture improves.',
-    ),
-    const _TutorialContent(
-      icon: Icons.camera_alt_outlined,
-      title: 'How the camera is used',
-      text:
-          'Posture Guard may use your camera while the app is open to improve posture detection. The camera is not used when the app is closed or running in the background.',
-      extra: _CameraPrivacyDetails(),
-    ),
-    const _TutorialContent(
-      icon: Icons.tune,
-      title: 'Adjust your alerts',
-      text:
-          'Use Settings to change how long poor posture must continue before an alert and how often alerts repeat.',
-    ),
-  ];
+  late final PageController _controller;
+  PostureCalibrationService? _calibrationService;
+  late int _page;
+  bool _finishing = false;
+  bool _calibrating = false;
+  bool? _calibrationSucceeded;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = widget.isReplay ? 2 : 0;
+    _controller = PageController(initialPage: _page);
+    _calibrationService = widget.calibrationService;
+  }
 
   @override
   void dispose() {
@@ -76,12 +43,32 @@ class _TutorialPageState extends State<TutorialPage> {
     super.dispose();
   }
 
+  Future<void> _calibrate() async {
+    if (_calibrating) return;
+    setState(() {
+      _calibrating = true;
+      _calibrationSucceeded = null;
+    });
+    final result = await (_calibrationService ??= PostureCalibrationService())
+        .calibrate();
+    if (!mounted) return;
+    setState(() {
+      _calibrating = false;
+      _calibrationSucceeded = result.success;
+    });
+  }
+
+  Future<void> _goTo(int page) async {
+    await _controller.animateToPage(
+      page.clamp(0, _pageCount - 1),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
   Future<void> _next() async {
-    if (_page < _pages.length - 1) {
-      await _controller.nextPage(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
+    if (_page < _pageCount - 1) {
+      await _goTo(_page + 1);
       return;
     }
 
@@ -98,14 +85,128 @@ class _TutorialPageState extends State<TutorialPage> {
     }
   }
 
+  Widget _pageShell({
+    required int pageIndex,
+    required IconData icon,
+    required String title,
+    required String body,
+    Widget? action,
+    Widget? feedback,
+  }) {
+    return SingleChildScrollView(
+      key: Key('tutorialPageScroll$pageIndex'),
+      physics: const ClampingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(28, 42, 28, 24),
+      child: Column(
+        children: [
+          Icon(icon, size: 92, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 32),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 18),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          if (action != null) ...[const SizedBox(height: 28), action],
+          if (feedback != null) ...[const SizedBox(height: 18), feedback],
+        ],
+      ),
+    );
+  }
+
+  Widget _postureStatesPage() {
+    final l10n = context.l10n;
+    return SingleChildScrollView(
+      key: const Key('tutorialPageScroll2'),
+      physics: const ClampingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+      child: Column(
+        children: [
+          Icon(
+            Icons.accessibility_new_rounded,
+            size: 64,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            l10n.knowPostureTitle,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 16),
+          _PostureStateCard(
+            key: const Key('tutorialGoodState'),
+            color: Colors.green,
+            icon: Icons.sentiment_satisfied_alt_rounded,
+            text: l10n.goodPostureExplanation,
+          ),
+          _PostureStateCard(
+            key: const Key('tutorialWarningState'),
+            color: Colors.orange,
+            icon: Icons.warning_amber_rounded,
+            text: l10n.warningPostureExplanation,
+          ),
+          _PostureStateCard(
+            key: const Key('tutorialBadState'),
+            color: Colors.red,
+            icon: Icons.sentiment_dissatisfied_rounded,
+            text: l10n.badPostureExplanation,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPage(int index) {
+    final l10n = context.l10n;
+    return switch (index) {
+      0 => _pageShell(
+        pageIndex: 0,
+        icon: Icons.health_and_safety_outlined,
+        title: l10n.welcomeTitle,
+        body: l10n.welcomeBody,
+      ),
+      1 => _pageShell(
+        pageIndex: 1,
+        icon: Icons.center_focus_strong,
+        title: l10n.calibrationTitle,
+        body: l10n.calibrationBody,
+        action: FilledButton.icon(
+          key: const Key('tutorialCalibrationButton'),
+          onPressed: _calibrating ? null : _calibrate,
+          icon: _calibrating
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.phone_android),
+          label: Text(l10n.calibrationButton),
+        ),
+        feedback: _calibrationSucceeded == null
+            ? null
+            : _SetupFeedback(
+                success: _calibrationSucceeded!,
+                message: _calibrationSucceeded!
+                    ? l10n.calibrationSuccess
+                    : l10n.calibrationError,
+              ),
+      ),
+      _ => _postureStatesPage(),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isLast = _page == _pages.length - 1;
+    final l10n = context.l10n;
+    final isLast = _page == _pageCount - 1;
 
     return Scaffold(
-      appBar: widget.isReplay
-          ? AppBar(title: const Text('How to use Posture Guard'))
-          : null,
+      appBar: widget.isReplay ? AppBar(title: Text(l10n.helpTooltip)) : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -114,47 +215,15 @@ class _TutorialPageState extends State<TutorialPage> {
                 key: const Key('tutorialPageView'),
                 controller: _controller,
                 physics: const ClampingScrollPhysics(),
-                itemCount: _pages.length,
+                itemCount: _pageCount,
                 onPageChanged: (value) => setState(() => _page = value),
-                itemBuilder: (context, index) {
-                  final content = _pages[index];
-                  return SingleChildScrollView(
-                    key: Key('tutorialPageScroll$index'),
-                    physics: const ClampingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(28, 48, 28, 24),
-                    child: Column(
-                      children: [
-                        Icon(
-                          content.icon,
-                          size: 92,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(height: 36),
-                        Text(
-                          content.title,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          content.text,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                        if (content.extra != null) ...[
-                          const SizedBox(height: 24),
-                          content.extra!,
-                        ],
-                      ],
-                    ),
-                  );
-                },
+                itemBuilder: (context, index) => _buildPage(index),
               ),
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
-                _pages.length,
+                _pageCount,
                 (index) => AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   width: index == _page ? 24 : 8,
@@ -172,17 +241,26 @@ class _TutorialPageState extends State<TutorialPage> {
             SafeArea(
               top: false,
               minimum: const EdgeInsets.all(20),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const Key('tutorialNextButton'),
-                  onPressed: _finishing ? null : _next,
-                  child: Text(
-                    isLast
-                        ? (widget.isReplay ? 'Done' : 'Get Started')
-                        : 'Next',
+              child: Row(
+                children: [
+                  if (_page > 0 && !widget.isReplay)
+                    TextButton.icon(
+                      key: const Key('tutorialBackButton'),
+                      onPressed: _finishing ? null : () => _goTo(_page - 1),
+                      icon: const Icon(Icons.arrow_back),
+                      label: Text(l10n.back),
+                    ),
+                  const Spacer(),
+                  FilledButton(
+                    key: const Key('tutorialNextButton'),
+                    onPressed: _finishing ? null : _next,
+                    child: Text(
+                      isLast
+                          ? (widget.isReplay ? l10n.done : l10n.continueButton)
+                          : l10n.next,
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ],
@@ -192,26 +270,59 @@ class _TutorialPageState extends State<TutorialPage> {
   }
 }
 
-class _CameraPrivacyDetails extends StatelessWidget {
-  const _CameraPrivacyDetails();
+class _PostureStateCard extends StatelessWidget {
+  const _PostureStateCard({
+    super.key,
+    required this.color,
+    required this.icon,
+    required this.text,
+  });
+
+  final Color color;
+  final IconData icon;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     return Card(
+      color: color.withValues(alpha: 0.1),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text('• Camera images are used only for posture detection.'),
-            SizedBox(height: 8),
-            Text('• Posture Guard does not save camera images.'),
-            SizedBox(height: 8),
-            Text(
-              '• Phone-angle monitoring still works without camera permission.',
-            ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 30),
+            const SizedBox(width: 12),
+            Expanded(child: Text(text)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SetupFeedback extends StatelessWidget {
+  const _SetupFeedback({required this.success, required this.message});
+
+  final bool success;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = success ? Colors.green : Theme.of(context).colorScheme.error;
+    return Semantics(
+      liveRegion: true,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(success ? Icons.check_circle : Icons.info_outline, color: color),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              message,
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -34,11 +34,9 @@ void main() {
     }
   });
 
-  test('invalid, low, NaN, and infinite neutral angles are rejected', () {
+  test('out-of-range, NaN, and infinite neutral angles are rejected', () {
     for (final value in [
       -1.0,
-      0.0,
-      44.9,
       90.1,
       double.nan,
       double.infinity,

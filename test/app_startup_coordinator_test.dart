@@ -55,44 +55,47 @@ void main() {
         InMemorySharedPreferencesAsync.empty();
   });
 
-  test('first launch waits for Get Started and then starts once', () async {
-    final tutorial = _FakeTutorialPreferences();
-    final store = _FakeSettingsStore(AppSettings.defaults);
-    var running = false;
-    var starts = 0;
-    var permissionRequests = 0;
-    final coordinator = AppStartupCoordinator(
-      tutorialPreferences: tutorial,
-      settingsStore: store,
-      isMonitoringRunning: () async => running,
-      requestNotificationPermission: () async {
-        permissionRequests++;
-        return NotificationPermission.granted;
-      },
-      startMonitoring: () async {
-        starts++;
-        running = true;
-        return const MonitoringActionResult(
-          success: true,
-          isRunning: true,
-          notificationPermission: NotificationPermission.granted,
-        );
-      },
-    );
+  test(
+    'first launch completes setup and starts once without requesting permission',
+    () async {
+      final tutorial = _FakeTutorialPreferences();
+      final store = _FakeSettingsStore(AppSettings.defaults);
+      var running = false;
+      var starts = 0;
+      var permissionRequests = 0;
+      final coordinator = AppStartupCoordinator(
+        tutorialPreferences: tutorial,
+        settingsStore: store,
+        isMonitoringRunning: () async => running,
+        requestNotificationPermission: () async {
+          permissionRequests++;
+          return NotificationPermission.granted;
+        },
+        startMonitoring: () async {
+          starts++;
+          running = true;
+          return const MonitoringActionResult(
+            success: true,
+            isRunning: true,
+            notificationPermission: NotificationPermission.granted,
+          );
+        },
+      );
 
-    expect(await coordinator.hasCompletedTutorial(), isFalse);
-    expect(starts, 0);
+      expect(await coordinator.hasCompletedTutorial(), isFalse);
+      expect(starts, 0);
 
-    final result = await coordinator.completeFirstLaunch();
+      final result = await coordinator.completeFirstLaunch();
 
-    expect(tutorial.completed, isTrue);
-    expect(tutorial.completionWrites, 1);
-    expect(store.settings.monitoringEnabled, isTrue);
-    expect(store.settings.alertsEnabled, isTrue);
-    expect(permissionRequests, 1);
-    expect(starts, 1);
-    expect(result.isRunning, isTrue);
-  });
+      expect(tutorial.completed, isTrue);
+      expect(tutorial.completionWrites, 1);
+      expect(store.settings.monitoringEnabled, isTrue);
+      expect(store.settings.alertsEnabled, isTrue);
+      expect(permissionRequests, 0);
+      expect(starts, 1);
+      expect(result.isRunning, isTrue);
+    },
+  );
 
   test(
     'later launches restore once and do not duplicate a running service',

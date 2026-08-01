@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:postureguard/l10n/app_localizations.dart';
 import 'package:postureguard/models/app_settings.dart';
 import 'package:postureguard/models/calibration.dart';
 import 'package:postureguard/pages/settings_page.dart';
@@ -85,8 +87,15 @@ Widget _settingsApp(
   Calibration? initialCalibration,
   Calibration? Function()? currentCalibration,
   bool initialHasCalibration = false,
+  bool showGuidedTour = false,
+  Locale locale = const Locale('en'),
+  Future<NotificationPermission> Function()? loadNotificationPermission,
+  Future<NotificationPermission> Function()? requestNotificationPermission,
 }) {
   return MaterialApp(
+    locale: locale,
+    supportedLocales: AppLocalizations.supportedLocales,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
     scrollBehavior: const NoStretchScrollBehavior(),
     home: Settings(
       store: store,
@@ -105,53 +114,59 @@ Widget _settingsApp(
       initialCalibration: initialCalibration,
       currentCalibration: currentCalibration,
       initialHasCalibration: initialHasCalibration,
+      showGuidedTour: showGuidedTour,
+      loadNotificationPermission: loadNotificationPermission,
+      requestNotificationPermission: requestNotificationPermission,
     ),
   );
 }
 
+Future<void> _bringIntoView(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  final center = tester.getCenter(finder);
+  if (center.dy > 470) {
+    await tester.drag(
+      find.byKey(const Key('settingsScrollView')),
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
+  }
+}
+
 void main() {
-  testWidgets(
-    'shows adaptive calibration diagnostics and updates immediately',
-    (tester) async {
-      final store = _FakeSettingsStore(AppSettings.defaults);
-      var calibration = const Calibration(neutralPhoneAngle: 90);
-      await tester.pumpWidget(
-        _settingsApp(
-          store,
-          initialCalibration: calibration,
-          currentCalibration: () => calibration,
-          onCalibrateNeutral: () async {
-            calibration = const Calibration(neutralPhoneAngle: 60);
-            return true;
-          },
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('calibrationDiagnostics')),
-        300,
-      );
+  testWidgets('hides calibration angles and updates status immediately', (
+    tester,
+  ) async {
+    final store = _FakeSettingsStore(AppSettings.defaults);
+    var calibration = const Calibration(neutralPhoneAngle: 90);
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        initialCalibration: calibration,
+        currentCalibration: () => calibration,
+        onCalibrateNeutral: () async {
+          calibration = const Calibration(neutralPhoneAngle: 60);
+          return true;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _bringIntoView(
+      tester,
+      find.byKey(const Key('calibrationDiagnostics')),
+    );
 
-      expect(find.textContaining('Neutral angle: 90\u00b0'), findsOneWidget);
-      expect(
-        find.textContaining('Bad posture below: 63\u00b0'),
-        findsOneWidget,
-      );
+    expect(find.text('Position saved'), findsOneWidget);
+    expect(find.textContaining('Neutral angle'), findsNothing);
+    expect(find.textContaining('\u00b0'), findsNothing);
 
-      await tester.tap(find.text('Recalibrate neutral posture'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('calibrateButton')));
+    await tester.pumpAndSettle();
 
-      expect(find.textContaining('Neutral angle: 60\u00b0'), findsOneWidget);
-      expect(
-        find.textContaining('Bad posture below: 42\u00b0'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('Return to good above: 47\u00b0'),
-        findsOneWidget,
-      );
-    },
-  );
+    expect(find.text('Position saved'), findsWidgets);
+    expect(find.textContaining('threshold'), findsNothing);
+  });
 
   testWidgets(
     'failed recalibration preserves previous diagnostics and settings',
@@ -171,15 +186,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.text('Recalibrate neutral posture'),
-        300,
-      );
+      await _bringIntoView(tester, find.byKey(const Key('calibrateButton')));
 
-      await tester.tap(find.text('Recalibrate neutral posture'));
+      await tester.tap(find.byKey(const Key('calibrateButton')));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Neutral angle: 72\u00b0'), findsOneWidget);
+      expect(find.text('Position saved'), findsOneWidget);
+      expect(find.textContaining('\u00b0'), findsNothing);
       expect(store.settings, originalSettings);
       expect(store.savedSettings, isNull);
     },
@@ -248,6 +261,10 @@ void main() {
     await tester.pumpWidget(_settingsApp(store));
     await tester.pumpAndSettle();
 
+    await _bringIntoView(
+      tester,
+      find.byKey(const Key('alertFrequencyDropdown')),
+    );
     await tester.tap(find.byKey(const Key('alertFrequencyDropdown')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('30 seconds').last);
@@ -256,7 +273,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(store.savedSettings?.alertFrequencySeconds, 30);
-    expect(find.text('Settings saved successfully.'), findsOneWidget);
+    expect(find.text('Settings saved.'), findsOneWidget);
   });
 
   testWidgets('rejects an invalid custom frequency', (tester) async {
@@ -264,14 +281,15 @@ void main() {
     await tester.pumpWidget(_settingsApp(store));
     await tester.pumpAndSettle();
 
+    await _bringIntoView(
+      tester,
+      find.byKey(const Key('alertFrequencyDropdown')),
+    );
     await tester.tap(find.byKey(const Key('alertFrequencyDropdown')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Custom').last);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('customFrequencyField')),
-      300,
-    );
+    await _bringIntoView(tester, find.byKey(const Key('customFrequencyField')));
     await tester.enterText(find.byKey(const Key('customFrequencyField')), '0');
     await tester.tap(find.byKey(const Key('saveSettingsButton')));
     await tester.pump();
@@ -298,7 +316,7 @@ void main() {
 
     expect(
       find.text(
-        'Settings were saved on this device, but Firebase sync failed.',
+        'Settings were saved on this device. Cloud backup will try again later.',
       ),
       findsOneWidget,
     );
@@ -328,7 +346,7 @@ void main() {
 
     expect(find.text('Start Monitoring'), findsNothing);
     expect(find.text('Stop Monitoring'), findsNothing);
-    expect(find.text('Posture monitoring is disabled.'), findsOneWidget);
+    expect(find.text('Posture Guard is off.'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('monitoringEnabledSwitch')));
     await tester.pump();
@@ -353,7 +371,7 @@ void main() {
       find.byKey(const Key('monitoringEnabledSwitch')),
     );
     expect(tile.value, isTrue);
-    expect(find.text('Posture monitoring is active.'), findsOneWidget);
+    expect(find.text('Posture Guard is working.'), findsOneWidget);
     expect(store.savedSettings?.monitoringEnabled, isTrue);
   });
 
@@ -379,7 +397,7 @@ void main() {
 
     expect(stopCalls, 1);
     expect(store.savedSettings?.monitoringEnabled, isFalse);
-    expect(find.text('Posture monitoring is disabled.'), findsOneWidget);
+    expect(find.text('Posture Guard is off.'), findsOneWidget);
   });
 
   testWidgets('failed stop restores the accurate enabled state', (
@@ -473,7 +491,7 @@ void main() {
     );
     expect(tile.value, isTrue);
     expect(store.savedSettings?.monitoringEnabled, isTrue);
-    expect(find.textContaining('cloud synchronization failed'), findsOneWidget);
+    expect(find.textContaining('Cloud backup will try again'), findsOneWidget);
   });
 
   testWidgets('alert switch saves and updates service without stopping it', (
@@ -527,18 +545,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final listView = tester.widget<ListView>(
+    final scrollView = tester.widget<SingleChildScrollView>(
       find.byKey(const Key('settingsScrollView')),
     );
-    expect(listView.physics, isA<ClampingScrollPhysics>());
+    expect(scrollView.physics, isA<ClampingScrollPhysics>());
     expect(find.byType(StretchingOverscrollIndicator), findsNothing);
     expect(find.byKey(const Key('saveSettingsButton')), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.text('Recalibrate neutral posture'),
-      300,
-    );
-    expect(find.text('Recalibrate neutral posture'), findsOneWidget);
+    await _bringIntoView(tester, find.byKey(const Key('calibrateButton')));
+    expect(find.byKey(const Key('calibrateButton')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -556,8 +571,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _bringIntoView(
+      tester,
+      find.byKey(const Key('allowScreenTimeAccessButton')),
+    );
     expect(find.text('Use device screen time'), findsOneWidget);
-    expect(find.text('Usage Access not granted.'), findsOneWidget);
+    expect(find.text('Access not granted'), findsOneWidget);
     expect(
       find.byKey(const Key('allowScreenTimeAccessButton')),
       findsOneWidget,
@@ -571,7 +590,7 @@ void main() {
     provider.hasAccess = true;
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpAndSettle();
-    expect(find.text('Usage Access granted.'), findsOneWidget);
+    expect(find.text('Access granted'), findsOneWidget);
     expect(find.byKey(const Key('allowScreenTimeAccessButton')), findsNothing);
   });
 
@@ -599,16 +618,174 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Recalibrate neutral posture'),
-      300,
-    );
+    await _bringIntoView(tester, find.byKey(const Key('calibrateButton')));
 
-    await tester.tap(find.text('Recalibrate neutral posture'));
+    await tester.tap(find.byKey(const Key('calibrateButton')));
     await tester.pumpAndSettle();
 
     expect(calibrations, 1);
     expect(store.settings, original);
     expect(store.savedSettings, isNull);
+  });
+
+  testWidgets('guided tour explains real controls without changing values', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final original = AppSettings.defaults.copyWith(alertsEnabled: false);
+    final store = _FakeSettingsStore(original);
+    final provider = _FakeScreenTimeProvider()..supported = false;
+
+    await tester.pumpWidget(
+      _settingsApp(store, showGuidedTour: true, screenTimeProvider: provider),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Turn posture tracking on or off.'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Choose whether you want posture reminders.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Choose how long Posture Guard waits before reminding you.'),
+      findsOneWidget,
+    );
+    expect(store.settings, original);
+    expect(store.savedSettings, isNull);
+
+    await tester.tap(find.byKey(const Key('settingsTourBackButton')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Choose whether you want posture reminders.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('missing screen-time access is optional and user initiated', (
+    tester,
+  ) async {
+    final store = _FakeSettingsStore(AppSettings.defaults);
+    final provider = _FakeScreenTimeProvider();
+    await tester.pumpWidget(
+      _settingsApp(store, showGuidedTour: true, screenTimeProvider: provider),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Show your screen time'), findsOneWidget);
+    expect(
+      find.text("Allow access to show today's total phone screen time."),
+      findsOneWidget,
+    );
+    expect(provider.settingsOpens, 0);
+
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pump();
+    expect(provider.settingsOpens, 1);
+    expect(find.byKey(const Key('settingsTourNextButton')), findsNothing);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(provider.settingsOpens, 1);
+    await tester.tap(find.byKey(const Key('settingsTourSkipButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Show your screen time'), findsNothing);
+    expect(find.text('Alert delay'), findsWidgets);
+  });
+
+  testWidgets(
+    'notification permission is requested only from the Allow action',
+    (tester) async {
+      var requests = 0;
+      final screenTime = _FakeScreenTimeProvider()..supported = false;
+      await tester.pumpWidget(
+        _settingsApp(
+          _FakeSettingsStore(AppSettings.defaults),
+          showGuidedTour: true,
+          screenTimeProvider: screenTime,
+          loadNotificationPermission: () async => NotificationPermission.denied,
+          requestNotificationPermission: () async {
+            requests++;
+            return NotificationPermission.denied;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(requests, 0);
+      await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+      await tester.pumpAndSettle();
+      expect(find.text('Allow notifications'), findsWidgets);
+      expect(requests, 0);
+
+      await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+      await tester.pumpAndSettle();
+      expect(requests, 1);
+      expect(
+        find.text('Choose how long Posture Guard waits before reminding you.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('granted screen-time access skips the optional prompt', (
+    tester,
+  ) async {
+    final provider = _FakeScreenTimeProvider()..hasAccess = true;
+    await tester.pumpWidget(
+      _settingsApp(
+        _FakeSettingsStore(AppSettings.defaults),
+        showGuidedTour: true,
+        screenTimeProvider: provider,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Show your screen time'), findsNothing);
+    expect(
+      find.text('Choose how long Posture Guard waits before reminding you.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Thai guided Settings copy fits scaled phone text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 700);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final provider = _FakeScreenTimeProvider()..supported = false;
+
+    await tester.pumpWidget(
+      _settingsApp(
+        _FakeSettingsStore(AppSettings.defaults),
+        showGuidedTour: true,
+        screenTimeProvider: provider,
+        locale: const Locale('th'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('เปิดหรือปิดการตรวจท่าทาง'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

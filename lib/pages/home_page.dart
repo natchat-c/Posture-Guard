@@ -12,21 +12,34 @@ import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../functions/posture_check.dart';
+import '../l10n/locale_controller.dart';
 import '../models/calibration.dart';
 import '../models/home_live_times.dart';
 import '../models/posture_thresholds.dart';
-import '../models/statistics_summary.dart';
 import '../services/device_screen_time_service.dart';
 import '../services/monitoring_service.dart';
 import '../services/preferences_service.dart';
 import '../services/statistics_repository.dart';
+import '../widgets/coach_mark_overlay.dart';
 import 'customize_page.dart';
 import 'settings_page.dart';
 import 'statistics_page.dart';
-import 'tutorial_page.dart';
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key});
+  const MyHomePage({
+    super.key,
+    this.showTourOnStart = false,
+    @visibleForTesting this.testMode = false,
+    @visibleForTesting this.settingsStore,
+    @visibleForTesting this.screenTimeProvider,
+    @visibleForTesting this.initialPostureStatus = 'GOOD',
+  });
+
+  final bool showTourOnStart;
+  final bool testMode;
+  final SettingsStore? settingsStore;
+  final DeviceScreenTimeProvider? screenTimeProvider;
+  final String initialPostureStatus;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -36,14 +49,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   static const Duration cameraDetectionInterval = Duration(milliseconds: 500);
   static const Duration deviceScreenTimeRefreshInterval = Duration(minutes: 1);
 
-  final SettingsRepository _settingsRepository = SettingsRepository();
+  late final SettingsStore _settingsRepository;
   final CalibrationRepository _calibrationRepository = CalibrationRepository();
-  final StatisticsRepository _statisticsRepository = StatisticsRepository();
+  late final StatisticsRepository _statisticsRepository;
   final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
   final CameraFrameStability _cameraFrameStability = CameraFrameStability();
-  final DeviceScreenTimeProvider _deviceScreenTimeProvider =
-      const AndroidDeviceScreenTimeProvider();
+  late final DeviceScreenTimeProvider _deviceScreenTimeProvider;
   final PresentationTicker _presentationTicker = PresentationTicker();
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _helpTourKey = GlobalKey();
+  final GlobalKey _settingsTourKey = GlobalKey();
+  final GlobalKey _statusTourKey = GlobalKey();
+  final GlobalKey _coinTourKey = GlobalKey();
   late final HomeLiveTimes _liveTimes;
 
   StreamSubscription<DailyStats>? _statsSubscription;
@@ -85,6 +102,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   double? _headX;
   double? _headY;
   double? _headZ;
+  int? _tourStep;
+  int? _preparedTourStep;
 
   bool get _appIsVisible {
     return WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
@@ -97,8 +116,21 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _settingsRepository = widget.settingsStore ?? SettingsRepository();
+    _deviceScreenTimeProvider =
+        widget.screenTimeProvider ?? const AndroidDeviceScreenTimeProvider();
+    _postureStatus = widget.initialPostureStatus;
+    // First launch already explained the three posture states on the real
+    // localized setup page. Replay starts at step 0 via the Help button.
+    if (widget.showTourOnStart) _tourStep = 1;
     WidgetsBinding.instance.addObserver(this);
     _liveTimes = HomeLiveTimes(dateKey: _activeDateKey);
+    if (widget.testMode) {
+      _initializing = false;
+      _monitoringActive = true;
+      return;
+    }
+    _statisticsRepository = StatisticsRepository();
     FlutterForegroundTask.addTaskDataCallback(_onServiceData);
     _subscribeToTodayStats();
     _initialize();
@@ -129,11 +161,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
 
     final warning = calibrationResult.warning ?? settingsResult.warning;
-    if (warning != null) _showMessage(warning);
+    if (warning != null) _showMessage(context.l10n.dataLoadWarning);
     if (_calibration == null) {
-      _showMessage(
-        'Calibrate your upright phone position before starting monitoring.',
-      );
+      _showMessage(context.l10n.postureSetupNeeded);
     }
     if (running) {
       MonitoringService.requestState();
@@ -170,9 +200,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           },
           onError: (Object error, StackTrace stackTrace) {
             if (mounted) {
-              _showMessage(
-                'Statistics are temporarily unavailable. Monitoring will keep retrying.',
-              );
+              _showMessage(context.l10n.statisticsUnavailable);
             }
           },
         );
@@ -246,8 +274,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         _monitoringActive = running;
         if (!running) {
           _postureStatus = 'GOOD';
-          _monitoringError =
-              'Monitoring stopped unexpectedly. Open Settings to restart it.';
+          _monitoringError = context.l10n.monitoringStoppedUnexpectedly;
         }
       });
       if (!running) {
@@ -262,11 +289,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   void _onServiceData(Object data) {
     if (!mounted || data is! Map) return;
     if (data['type'] == 'monitoringError') {
-      final message = data['message']?.toString();
-      if (message != null) {
-        setState(() => _monitoringError = message);
-        _showMessage(message);
-      }
+      final message = context.l10n.monitoringProblem;
+      setState(() => _monitoringError = message);
+      _showMessage(message);
       return;
     }
 
@@ -323,14 +348,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<MonitoringControlResult> _startMonitoring() async {
+    final l10n = context.l10n;
     if (_monitoringActive) {
       return const MonitoringControlResult(success: true, isActive: true);
     }
     if (_changingMonitoringState) {
-      return const MonitoringControlResult(
+      return MonitoringControlResult(
         success: false,
         isActive: false,
-        message: 'A monitoring action is already in progress.',
+        message: l10n.actionInProgress,
       );
     }
     setState(() {
@@ -352,8 +378,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       _changingMonitoringState = false;
       _monitoringActive = result.success && result.isRunning;
       if (!result.success) {
-        _monitoringError =
-            'Foreground monitoring could not start: ${result.error}';
+        _monitoringError = l10n.monitoringStartFailed;
       }
     });
 
@@ -371,9 +396,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       success: true,
       isActive: true,
       message: result.notificationPermission != NotificationPermission.granted
-          ? 'Monitoring is active, but Android notifications are disabled. '
-                'Enable notifications in system settings to receive posture alerts.'
-          : 'Monitoring started.',
+          ? l10n.notificationPermissionOff
+          : l10n.monitoringStarted,
     );
   }
 
@@ -382,10 +406,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       return const MonitoringControlResult(success: true, isActive: false);
     }
     if (_changingMonitoringState) {
-      return const MonitoringControlResult(
+      return MonitoringControlResult(
         success: false,
         isActive: true,
-        message: 'A monitoring action is already in progress.',
+        message: context.l10n.actionInProgress,
       );
     }
 
@@ -407,19 +431,20 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         _postureStatus = 'GOOD';
         _monitoringError = null;
       } else {
-        _monitoringError = 'Monitoring could not be stopped: ${result.error}';
+        _monitoringError = context.l10n.monitoringStopFailed;
       }
     });
     return MonitoringControlResult(
       success: result.success,
       isActive: result.isRunning,
       message: result.success
-          ? 'Monitoring stopped.'
-          : 'Monitoring could not be stopped: ${result.error}',
+          ? context.l10n.monitoringStopped
+          : context.l10n.monitoringStopFailed,
     );
   }
 
   Future<bool> _calibrateNeutral() async {
+    final l10n = context.l10n;
     double? angle;
     if (_monitoringActive && _hasPhoneAngle) {
       final now = DateTime.now();
@@ -428,31 +453,22 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           .map((sample) => sample.angle);
       angle = stablePhoneAngle(recent);
       if (angle == null) {
-        _showMessage(
-          'Hold the phone steady in your viewing position for a few seconds, then try again.',
-        );
+        _showMessage(l10n.calibrationError);
         return false;
       }
     } else if (_monitoringActive) {
-      _showMessage(
-        'Waiting for the orientation sensor. Hold the phone steady and try again.',
-      );
+      _showMessage(l10n.calibrationError);
       return false;
     } else {
       angle = await _readCalibrationAngle();
     }
 
     if (angle == null || !isValidSensorPhoneAngle(angle)) {
-      _showMessage(
-        'Calibration failed because a stable phone angle was not available.',
-      );
+      _showMessage(l10n.calibrationError);
       return false;
     }
     if (!isValidCalibrationPhoneAngle(angle)) {
-      _showMessage(
-        'Calibration needs a stable phone-angle reading. Hold the phone still in '
-        'your usual viewing position, then try again.',
-      );
+      _showMessage(l10n.calibrationError);
       return false;
     }
 
@@ -476,13 +492,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       });
       MonitoringService.updateCalibration(calibration);
       if (!result.savedToFirebase) {
-        _showMessage(
-          'Calibration was saved on this device, but Firebase sync failed.',
-        );
+        _showMessage(l10n.calibrationCloudWarning);
       }
       return result.savedLocally;
     } catch (error) {
-      _showMessage('Could not save calibration: $error');
+      _showMessage(l10n.calibrationSaveFailed);
       return false;
     }
   }
@@ -512,7 +526,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _openSettings() async {
-    await Navigator.push<void>(
+    final guided = _tourStep == 1;
+    if (guided) setState(() => _tourStep = null);
+    final tourResult = await Navigator.push<SettingsTourResult>(
       context,
       MaterialPageRoute(
         builder: (context) => Settings(
@@ -529,6 +545,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           onSettingsSaved: (settings) async {
             MonitoringService.updateSettings(settings);
           },
+          showGuidedTour: guided,
         ),
       ),
     );
@@ -537,6 +554,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     MonitoringService.updateSettings(result.settings);
     await _refreshPresentationSources();
+    if (!mounted || !guided) return;
+    setState(() {
+      _preparedTourStep = null;
+      _tourStep = switch (tourResult) {
+        SettingsTourResult.completed => 2,
+        SettingsTourResult.skipped => null,
+        SettingsTourResult.back || null => 1,
+      };
+    });
   }
 
   Future<bool> _loadMonitoringStateForSettings() async {
@@ -564,9 +590,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     setState(() => _cameraPermissionGranted = requested.isGranted);
     if (!requested.isGranted) {
-      _showMessage(
-        'Camera access was not granted. Phone-angle monitoring will continue normally.',
-      );
+      _showMessage(context.l10n.cameraNotGranted);
     }
   }
 
@@ -610,6 +634,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _startCamera() async {
+    final l10n = context.l10n;
     if (_cameraActive ||
         _cameraStarting ||
         _cameraStopping ||
@@ -624,7 +649,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        _markCameraUnavailable('Camera unavailable; using phone angle.');
+        _markCameraUnavailable(l10n.cameraUnavailable);
         return;
       }
 
@@ -666,9 +691,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     } catch (error) {
       debugPrint('Camera initialization failed: $error');
       await _disposeCurrentCameraController();
-      _markCameraUnavailable(
-        'Camera could not start; monitoring continues with phone angle.',
-      );
+      _markCameraUnavailable(l10n.cameraUnavailable);
     } finally {
       _cameraStarting = false;
     }
@@ -743,7 +766,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       if (!mounted || !_cameraActive) return;
       if (faces.isEmpty) {
         _markCameraUnavailable(
-          'Face not detected; using phone angle.',
+          context.l10n.cameraFaceNotFound,
           disableRetry: false,
         );
         return;
@@ -764,7 +787,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       );
 
       if (!_cameraDataReliable) {
-        setState(() => _cameraStatusMessage = 'Checking camera position…');
+        setState(() => _cameraStatusMessage = context.l10n.cameraChecking);
         MonitoringService.updateCameraSupplement(available: false);
         return;
       }
@@ -795,7 +818,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       );
     } catch (error) {
       debugPrint('Face detection failed: $error');
-      _markCameraUnavailable('Camera detection failed; using phone angle.');
+      _markCameraUnavailable(context.l10n.cameraUnavailable);
     } finally {
       _processingCameraFrame = false;
     }
@@ -908,8 +931,85 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _startHomeTour() {
+    setState(() {
+      _tourStep = 0;
+      _preparedTourStep = null;
+    });
+  }
+
+  GlobalKey? _tourKeyForStep(int step) {
+    return switch (step) {
+      0 => _statusTourKey,
+      1 => _settingsTourKey,
+      2 => _coinTourKey,
+      3 => _helpTourKey,
+      _ => null,
+    };
+  }
+
+  Future<void> _prepareTourTarget() async {
+    final step = _tourStep;
+    if (step == null || _preparedTourStep == step) return;
+    _preparedTourStep = step;
+    await WidgetsBinding.instance.endOfFrame;
+    final targetContext = _tourKeyForStep(step)?.currentContext;
+    if (targetContext != null && targetContext.mounted) {
+      await Scrollable.ensureVisible(
+        targetContext,
+        alignment: 0.35,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
+    if (mounted) setState(() {});
+  }
+
+  Rect? _tourTargetRect() {
+    final step = _tourStep;
+    if (step == null) return null;
+    final renderObject = _tourKeyForStep(
+      step,
+    )?.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+    return renderObject.localToGlobal(Offset.zero) & renderObject.size;
+  }
+
+  void _moveTour(int delta) {
+    final current = _tourStep;
+    if (current == null) return;
+    final next = current + delta;
+    if (next < 0) return;
+    if (next > 4) {
+      setState(() => _tourStep = null);
+      return;
+    }
+    setState(() {
+      _tourStep = next;
+      _preparedTourStep = null;
+    });
+  }
+
   String _formatTime(int seconds) {
-    return formatCompactDuration(seconds);
+    return localizedDuration(context.l10n, seconds);
+  }
+
+  String _localizedPostureStatus() {
+    if (!_monitoringActive) return context.l10n.monitoringOff;
+    return switch (_postureStatus) {
+      'GOOD' => context.l10n.goodPosture,
+      'WARNING' => context.l10n.warningPosture,
+      _ => context.l10n.badPostureStatus,
+    };
+  }
+
+  String _localizedPostureHint() {
+    if (!_monitoringActive) return '';
+    return switch (_postureStatus) {
+      'GOOD' => context.l10n.goodPostureHint,
+      'WARNING' => context.l10n.warningPostureHint,
+      _ => context.l10n.badPostureHint,
+    };
   }
 
   bool get _showDeviceScreenTime {
@@ -935,6 +1035,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     _serviceStateTimer?.cancel();
     _deviceScreenTimeRefreshTimer?.cancel();
     _presentationTicker.dispose();
+    _scrollController.dispose();
     unawaited(_disposeCameraResources());
     super.dispose();
   }
@@ -952,21 +1053,36 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    return Scaffold(
+    final l10n = context.l10n;
+    if (_tourStep != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _prepareTourTarget());
+    }
+    final tourContent = switch (_tourStep) {
+      0 => (l10n.guidePostureTitle, l10n.guidePostureBody),
+      1 => (l10n.guideSettingsTitle, l10n.guideSettingsBody),
+      2 => (l10n.guideCoinsTitle, l10n.guideCoinsBody),
+      3 => (l10n.guideHelpTitle, l10n.guideHelpBody),
+      _ => (l10n.guideFinishTitle, l10n.guideFinishBody),
+    };
+
+    final home = Scaffold(
       body: SafeArea(
         child: ListView(
+          controller: _scrollController,
           key: const Key('homeScrollView'),
           physics: const ClampingScrollPhysics(),
           padding: EdgeInsets.zero,
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 35, left: 25, right: 25),
+              padding: const EdgeInsets.only(top: 18, left: 20, right: 20),
               child: Row(
                 children: [
                   SizedBox(
+                    key: _coinTourKey,
                     width: 75,
                     height: 40,
                     child: FloatingActionButton.extended(
+                      key: const Key('homeCoinBalance'),
                       heroTag: 'homeCoinsButton',
                       onPressed: null,
                       icon: const Icon(Icons.monetization_on_rounded),
@@ -975,31 +1091,32 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   ),
                   const Spacer(),
                   SizedBox(
+                    key: _helpTourKey,
                     width: 40,
                     height: 40,
                     child: FloatingActionButton(
+                      key: const Key('homeHelpButton'),
                       heroTag: 'homeHelpButton',
-                      tooltip: 'How to use Posture Guard',
-                      onPressed: () async {
-                        await Navigator.push<void>(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                const TutorialPage(isReplay: true),
-                          ),
-                        );
-                        if (mounted) await _refreshPresentationSources();
+                      tooltip: l10n.helpTooltip,
+                      onPressed: () {
+                        if (_tourStep == 3) {
+                          _moveTour(1);
+                        } else {
+                          _startHomeTour();
+                        }
                       },
                       child: const Icon(Icons.question_mark),
                     ),
                   ),
                   const SizedBox(width: 10),
                   SizedBox(
+                    key: _settingsTourKey,
                     width: 40,
                     height: 40,
                     child: FloatingActionButton(
+                      key: const Key('homeSettingsButton'),
                       heroTag: 'homeSettingsButton',
-                      tooltip: 'Settings',
+                      tooltip: l10n.settings,
                       onPressed: _openSettings,
                       child: const Icon(Icons.settings),
                     ),
@@ -1007,25 +1124,57 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                 ],
               ),
             ),
-            const SizedBox(height: 10),
-            const Text(
-              'STATUS',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 20),
-            ),
-            Text(
-              _postureStatus,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 50,
-                fontWeight: FontWeight.bold,
-                color: _statusColor(),
-              ),
-            ),
-            Text(
-              'Score: ${_stats.dailyScore.round()}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18),
+            const SizedBox(height: 8),
+            Column(
+              key: _statusTourKey,
+              children: [
+                Text(
+                  l10n.status.toUpperCase(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    height: 56,
+                    child: Center(
+                      child: Text(
+                        _localizedPostureStatus(),
+                        key: const Key('homePostureStatus'),
+                        maxLines: 2,
+                        overflow: TextOverflow.fade,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 40,
+                          height: 1.05,
+                          fontWeight: FontWeight.bold,
+                          color: _statusColor(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: 22,
+                  child: Text(
+                    _localizedPostureHint(),
+                    key: const Key('homePostureHint'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+                Text(
+                  l10n.score(_stats.dailyScore.round()),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ],
             ),
             if (_cameraStatusMessage != null)
               Text(
@@ -1033,9 +1182,25 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 13),
               ),
-            const SizedBox(height: 20),
-            Image.asset('images/happy slime.png', width: 300, height: 300),
-            const SizedBox(height: 30),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _statusColor().withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: SizedBox(
+                  key: const Key('homeCharacterArtwork'),
+                  height: 250,
+                  child: Image.asset(
+                    'images/happy slime.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -1044,16 +1209,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.access_time_filled, size: 35),
-                        const SizedBox(width: 10),
+                        const Icon(Icons.access_time_filled, size: 30),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 _showDeviceScreenTime
-                                    ? 'Device screen time'
-                                    : 'Monitored time',
+                                    ? l10n.deviceScreenTime
+                                    : l10n.monitoredTime,
                                 style: const TextStyle(fontSize: 11),
                               ),
                               Text(
@@ -1062,7 +1227,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                       ? _liveTimes.deviceScreenTimeSeconds!
                                       : _liveTimes.monitoredSeconds,
                                 ),
-                                style: const TextStyle(fontSize: 20),
+                                style: const TextStyle(fontSize: 18),
                               ),
                             ],
                           ),
@@ -1070,27 +1235,27 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 20),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Icon(
                           Icons.sentiment_dissatisfied_sharp,
-                          size: 35,
+                          size: 30,
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Bad posture',
-                                style: TextStyle(fontSize: 11),
+                              Text(
+                                l10n.badPosture,
+                                style: const TextStyle(fontSize: 11),
                               ),
                               Text(
                                 _formatTime(_liveTimes.badPostureSeconds),
-                                style: const TextStyle(fontSize: 20),
+                                style: const TextStyle(fontSize: 18),
                               ),
                             ],
                           ),
@@ -1101,15 +1266,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                 ],
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 16),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 25),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
               child: Row(
                 children: [
                   Expanded(
                     child: SizedBox(
                       height: 60,
                       child: FloatingActionButton(
+                        key: const Key('homeCustomizeButton'),
                         heroTag: 'homeCustomizeButton',
                         onPressed: () async {
                           await Navigator.push<void>(
@@ -1123,9 +1289,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(25),
                         ),
-                        child: const Text(
-                          'CUSTOMIZE',
-                          style: TextStyle(fontSize: 25),
+                        child: Text(
+                          l10n.customize.toUpperCase(),
+                          style: const TextStyle(fontSize: 22),
                         ),
                       ),
                     ),
@@ -1135,8 +1301,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                     width: 60,
                     height: 60,
                     child: FloatingActionButton(
+                      key: const Key('homeStatisticsButton'),
                       heroTag: 'homeStatisticsButton',
-                      tooltip: 'Statistics',
+                      tooltip: l10n.statistics,
                       onPressed: () async {
                         await Navigator.push<void>(
                           context,
@@ -1160,6 +1327,83 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           ],
         ),
       ),
+    );
+
+    final step = _tourStep;
+    if (step == null) return home;
+    return Stack(
+      children: [
+        home,
+        Positioned.fill(
+          child: CoachMarkOverlay(
+            target: _tourTargetRect(),
+            title: tourContent.$1,
+            body: tourContent.$2,
+            content: step == 0
+                ? _PostureTourLegend(
+                    good: l10n.goodPostureExplanation,
+                    warning: l10n.warningPostureExplanation,
+                    bad: l10n.badPostureExplanation,
+                  )
+                : null,
+            currentStep: step,
+            totalSteps: 5,
+            backLabel: l10n.back,
+            nextLabel: step == 4 ? l10n.done : l10n.next,
+            skipLabel: l10n.skipForNow,
+            onBack: step == 0 ? null : () => _moveTour(-1),
+            onNext: step == 1 ? null : () => _moveTour(1),
+            onSkip: () => setState(() => _tourStep = null),
+            nextButtonKey: const Key('homeTourNextButton'),
+            backButtonKey: const Key('homeTourBackButton'),
+            skipButtonKey: const Key('homeTourSkipButton'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PostureTourLegend extends StatelessWidget {
+  const _PostureTourLegend({
+    required this.good,
+    required this.warning,
+    required this.bad,
+  });
+
+  final String good;
+  final String warning;
+  final String bad;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _PostureLegendRow(color: Colors.green, text: good),
+        const SizedBox(height: 8),
+        _PostureLegendRow(color: Colors.orange, text: warning),
+        const SizedBox(height: 8),
+        _PostureLegendRow(color: Colors.red, text: bad),
+      ],
+    );
+  }
+}
+
+class _PostureLegendRow extends StatelessWidget {
+  const _PostureLegendRow({required this.color, required this.text});
+
+  final Color color;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.circle, size: 14, color: color),
+        const SizedBox(width: 10),
+        Expanded(child: Text(text)),
+      ],
     );
   }
 }

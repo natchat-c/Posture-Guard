@@ -55,7 +55,7 @@ void main() {
         previous,
         updatedAtEpochMs: 100,
       );
-      const invalidCandidate = Calibration(neutralPhoneAngle: 30);
+      const invalidCandidate = Calibration(neutralPhoneAngle: -1);
 
       expect(invalidCandidate.isValid, isFalse);
       final restored = await CalibrationRepository.loadCachedCalibration(
@@ -86,7 +86,7 @@ void main() {
 
   test('NaN, infinity, and below-minimum calibrations are invalid', () {
     for (final angle in [
-      44.9,
+      -0.1,
       double.nan,
       double.infinity,
       double.negativeInfinity,

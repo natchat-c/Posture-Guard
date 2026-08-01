@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
+import '../l10n/locale_controller.dart';
 import '../models/home_live_times.dart';
 import '../models/statistics_live_presentation.dart';
 import '../models/statistics_summary.dart';
@@ -215,6 +216,7 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
     Map<String, DailyStats> records, {
     required bool hasError,
   }) {
+    final l10n = context.l10n;
     final scores = summary.scoresForPastSevenDays(records);
     return SingleChildScrollView(
       key: const Key('statisticsScrollView'),
@@ -228,7 +230,7 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                const Text('Statistics', style: TextStyle(fontSize: 45)),
+                Text(l10n.statistics, style: const TextStyle(fontSize: 42)),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: SizedBox(
@@ -247,49 +249,45 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
           if (hasError)
             Card(
               color: Theme.of(context).colorScheme.errorContainer,
-              child: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text(
-                  'Some statistics could not be refreshed. Showing available data.',
-                ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(l10n.statisticsRefreshWarning),
               ),
             ),
           const SizedBox(height: 16),
-          _sectionTitle('Today'),
+          _sectionTitle(l10n.today),
           _summaryCard([
             _Metric(
-              'Device screen time',
+              l10n.deviceScreenTime,
               summary.todayDeviceScreenTimeSeconds == null
-                  ? 'Unavailable'
-                  : formatCompactDuration(
+                  ? l10n.unavailable
+                  : localizedDuration(
+                      l10n,
                       summary.todayDeviceScreenTimeSeconds!,
                     ),
             ),
             _Metric(
-              'Monitored posture time',
-              formatCompactDuration(summary.today.monitoredTimeSeconds),
+              l10n.monitoredTime,
+              localizedDuration(l10n, summary.today.monitoredTimeSeconds),
             ),
             _Metric(
-              'Good posture',
-              formatCompactDuration(summary.today.goodPostureSeconds),
+              l10n.goodPostureTime,
+              localizedDuration(l10n, summary.today.goodPostureSeconds),
             ),
             _Metric(
-              'Bad posture',
-              formatCompactDuration(summary.today.badPostureSeconds),
+              l10n.badPosture,
+              localizedDuration(l10n, summary.today.badPostureSeconds),
             ),
             _Metric(
-              'Posture score',
+              l10n.postureScore,
               summary.today.hasTrackedPosture
                   ? '${summary.today.dailyScore.round()}%'
-                  : 'No data',
+                  : l10n.noData,
             ),
-            _Metric(
-              'Posture alerts sent',
-              summary.today.alertsSentCount.toString(),
-            ),
+            _Metric(l10n.alertsSent, summary.today.alertsSentCount.toString()),
           ]),
           const SizedBox(height: 24),
-          _sectionTitle('Past 7 Days'),
+          _sectionTitle(l10n.pastSevenDays),
           const SizedBox(height: 8),
           _dateLabels(summary.pastSevenDays),
           const SizedBox(height: 12),
@@ -297,34 +295,32 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
           const SizedBox(height: 16),
           _summaryCard([
             _Metric(
-              'Average posture score',
+              l10n.averageScore,
               _formatScore(summary.pastSeven.averageDailyScore),
             ),
             _Metric(
-              'Average monitored time',
+              l10n.averageMonitoredTime,
               summary.pastSeven.averageMonitoredSecondsPerTrackedDay == null
-                  ? 'No data'
-                  : formatCompactDuration(
+                  ? l10n.noData
+                  : localizedDuration(
+                      l10n,
                       summary.pastSeven.averageMonitoredSecondsPerTrackedDay!
                           .round(),
                     ),
             ),
             _Metric(
-              'Total good posture',
-              formatCompactDuration(summary.pastSeven.totalGoodSeconds),
+              l10n.totalGoodPosture,
+              localizedDuration(l10n, summary.pastSeven.totalGoodSeconds),
             ),
             _Metric(
-              'Total bad posture',
-              formatCompactDuration(summary.pastSeven.totalBadSeconds),
+              l10n.totalBadPosture,
+              localizedDuration(l10n, summary.pastSeven.totalBadSeconds),
             ),
-            _Metric('Days tracked', summary.pastSeven.trackedDays.toString()),
-            _Metric(
-              'Posture alerts sent',
-              summary.pastSeven.alertsSent.toString(),
-            ),
+            _Metric(l10n.daysTracked, summary.pastSeven.trackedDays.toString()),
+            _Metric(l10n.alertsSent, summary.pastSeven.alertsSent.toString()),
           ]),
           const SizedBox(height: 24),
-          _sectionTitle('Past 7 days vs previous 7 days'),
+          _sectionTitle(l10n.pastVsPrevious),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -335,38 +331,35 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(height: 24),
-          _sectionTitle('All Time'),
+          _sectionTitle(l10n.allTime),
           Text(
-            'Since you started using Posture Guard',
+            l10n.sinceStarted,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 8),
           _summaryCard([
-            _Metric('Days tracked', summary.allTime.daysTracked.toString()),
+            _Metric(l10n.daysTracked, summary.allTime.daysTracked.toString()),
             _Metric(
-              'Total monitored time',
-              formatCompactDuration(summary.allTime.totalMonitoredSeconds),
+              l10n.totalMonitoredTime,
+              localizedDuration(l10n, summary.allTime.totalMonitoredSeconds),
             ),
             _Metric(
-              'Total good posture',
-              formatCompactDuration(summary.allTime.totalGoodSeconds),
+              l10n.totalGoodPosture,
+              localizedDuration(l10n, summary.allTime.totalGoodSeconds),
             ),
             _Metric(
-              'Total bad posture',
-              formatCompactDuration(summary.allTime.totalBadSeconds),
+              l10n.totalBadPosture,
+              localizedDuration(l10n, summary.allTime.totalBadSeconds),
             ),
             _Metric(
-              'Weighted posture score',
+              l10n.weightedScore,
               _formatScore(summary.allTime.weightedScore),
             ),
-            _Metric('Best recorded day', _bestDayText(summary.allTime.bestDay)),
+            _Metric(l10n.bestDay, _bestDayText(summary.allTime.bestDay)),
           ]),
           if (records.values.every((stats) => !stats.hasTrackedPosture)) ...[
             const SizedBox(height: 16),
-            const Text(
-              'No posture history yet. Statistics will appear after monitoring begins.',
-              textAlign: TextAlign.center,
-            ),
+            Text(l10n.noHistory, textAlign: TextAlign.center),
           ],
         ],
       ),
@@ -472,28 +465,37 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
   }
 
   String _formatScore(double? score) {
-    return score == null ? 'No data' : '${score.round()}%';
+    return score == null ? context.l10n.noData : '${score.round()}%';
   }
 
   String _trendText(StatisticsSummary summary) {
     final points = summary.trendPoints?.abs().toStringAsFixed(1);
     return switch (summary.trend) {
-      ScoreTrend.improvement => 'Improvement of $points percentage points',
-      ScoreTrend.decline => 'Decline of $points percentage points',
-      ScoreTrend.unchanged => 'No meaningful change',
-      ScoreTrend.insufficientData => 'Not enough data',
+      ScoreTrend.improvement => context.l10n.trendImprovement(points ?? '0'),
+      ScoreTrend.decline => context.l10n.trendDecline(points ?? '0'),
+      ScoreTrend.unchanged => context.l10n.trendUnchanged,
+      ScoreTrend.insufficientData => context.l10n.notEnoughData,
     };
   }
 
   String _bestDayText(BestRecordedDay? bestDay) {
-    if (bestDay == null) return 'Not enough data';
+    if (bestDay == null) return context.l10n.notEnoughData;
     return '${_weekday(bestDay.date.weekday)} '
         '${bestDay.date.day}/${bestDay.date.month}/${bestDay.date.year} '
         '(${bestDay.score.round()}%)';
   }
 
   String _weekday(int weekday) {
-    return const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][weekday - 1];
+    final l10n = context.l10n;
+    return [
+      l10n.weekdayMon,
+      l10n.weekdayTue,
+      l10n.weekdayWed,
+      l10n.weekdayThu,
+      l10n.weekdayFri,
+      l10n.weekdaySat,
+      l10n.weekdaySun,
+    ][weekday - 1];
   }
 }
 

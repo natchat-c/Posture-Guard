@@ -3,7 +3,9 @@ import 'dart:typed_data';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../l10n/locale_controller.dart';
 import 'alert_mute_service.dart';
+import 'preferences_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> handlePostureNotificationAction(
@@ -32,6 +34,22 @@ Future<bool> applyPostureNotificationAction(
   return true;
 }
 
+class PostureNotificationContent {
+  const PostureNotificationContent({
+    required this.title,
+    required this.body,
+    required this.mute15MinutesLabel,
+    required this.mute1HourLabel,
+    required this.channelId,
+  });
+
+  final String title;
+  final String body;
+  final String mute15MinutesLabel;
+  final String mute1HourLabel;
+  final String channelId;
+}
+
 class PostureNotificationService {
   PostureNotificationService._();
 
@@ -44,21 +62,59 @@ class PostureNotificationService {
   static const List<AndroidNotificationAction> postureAlertActions = [
     AndroidNotificationAction(
       mute15MinutesActionId,
-      'Mute for 15 min',
+      'Mute 15 min',
       showsUserInterface: false,
       cancelNotification: true,
     ),
     AndroidNotificationAction(
       mute1HourActionId,
-      'Mute for 1 hour',
+      'Mute 1 hour',
       showsUserInterface: false,
       cancelNotification: true,
     ),
   ];
 
+  static List<AndroidNotificationAction> postureAlertActionsForLanguage(
+    String? languageCode,
+  ) {
+    final content = contentForLanguage(languageCode);
+    return [
+      AndroidNotificationAction(
+        mute15MinutesActionId,
+        content.mute15MinutesLabel,
+        showsUserInterface: false,
+        cancelNotification: true,
+      ),
+      AndroidNotificationAction(
+        mute1HourActionId,
+        content.mute1HourLabel,
+        showsUserInterface: false,
+        cancelNotification: true,
+      ),
+    ];
+  }
+
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
+
+  static PostureNotificationContent contentForLanguage(String? languageCode) {
+    final l10n = localizationsForLanguage(languageCode);
+    return PostureNotificationContent(
+      title: l10n.postureNotificationTitle,
+      body: l10n.postureNotificationBody,
+      mute15MinutesLabel: l10n.mute15Minutes,
+      mute1HourLabel: l10n.mute1Hour,
+      channelId: postureAlertChannelId,
+    );
+  }
+
+  static Future<PostureNotificationContent> loadContent({
+    LanguagePreferences? languagePreferences,
+  }) async {
+    final code = await (languagePreferences ?? LanguagePreferences()).load();
+    return contentForLanguage(code);
+  }
 
   static Future<void> initialize() async {
     if (_initialized) return;
@@ -82,7 +138,7 @@ class PostureNotificationService {
     const channel = AndroidNotificationChannel(
       postureAlertChannelId,
       postureAlertChannelName,
-      description: 'Sound and vibration alerts for sustained poor posture.',
+      description: 'Posture reminders from Posture Guard',
       importance: Importance.max,
       playSound: true,
       enableVibration: true,
@@ -98,12 +154,14 @@ class PostureNotificationService {
 
   static Future<void> showPostureAlert() async {
     await initialize();
+    final languageCode = await LanguagePreferences().load();
+    final content = contentForLanguage(languageCode);
+    final l10n = localizationsForLanguage(languageCode);
 
     final androidDetails = AndroidNotificationDetails(
       postureAlertChannelId,
       postureAlertChannelName,
-      channelDescription:
-          'Sound and vibration alerts for sustained poor posture.',
+      channelDescription: l10n.notificationChannelDescription,
       importance: Importance.max,
       priority: Priority.max,
       playSound: true,
@@ -112,7 +170,7 @@ class PostureNotificationService {
       onlyAlertOnce: false,
       category: AndroidNotificationCategory.reminder,
       visibility: NotificationVisibility.public,
-      actions: postureAlertActions,
+      actions: postureAlertActionsForLanguage(languageCode),
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -122,13 +180,36 @@ class PostureNotificationService {
 
     await _plugin.show(
       id: postureAlertNotificationId,
-      title: 'Check your posture',
-      body:
-          'Your phone angle suggests poor posture. Adjust your position or mute alerts temporarily.',
+      title: content.title,
+      body: content.body,
       notificationDetails: NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       ),
+    );
+  }
+
+  static Future<({String title, String body})> foregroundText({
+    required bool screenInteractive,
+    LanguagePreferences? languagePreferences,
+  }) async {
+    final code = await (languagePreferences ?? LanguagePreferences()).load();
+    return foregroundTextForLanguage(
+      languageCode: code,
+      screenInteractive: screenInteractive,
+    );
+  }
+
+  static ({String title, String body}) foregroundTextForLanguage({
+    required String? languageCode,
+    required bool screenInteractive,
+  }) {
+    final l10n = localizationsForLanguage(languageCode);
+    return (
+      title: l10n.foregroundTitle,
+      body: screenInteractive
+          ? l10n.foregroundMonitoring
+          : l10n.foregroundPaused,
     );
   }
 

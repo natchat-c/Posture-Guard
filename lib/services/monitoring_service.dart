@@ -56,9 +56,8 @@ class MonitoringService {
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
         channelId: 'posture_guard_monitoring',
-        channelName: 'Posture Guard monitoring',
-        channelDescription:
-            'Permanent notification shown while phone-angle monitoring is active.',
+        channelName: 'Posture Guard',
+        channelDescription: 'Posture Guard reminders and status',
         channelImportance: NotificationChannelImportance.LOW,
         priority: NotificationPriority.LOW,
         enableVibration: false,
@@ -157,18 +156,16 @@ class MonitoringService {
       );
     }
 
-    NotificationPermission permission;
-    try {
-      permission = await requestNotificationPermissionIfAppropriate();
-    } catch (_) {
-      permission = NotificationPermission.denied;
-    }
+    final permission = await notificationPermission();
+    final notificationText = await PostureNotificationService.foregroundText(
+      screenInteractive: true,
+    );
 
     final result = await FlutterForegroundTask.startService(
       serviceId: PostureNotificationService.foregroundServiceNotificationId,
       serviceTypes: const [ForegroundServiceTypes.specialUse],
-      notificationTitle: 'Posture Guard is active',
-      notificationText: 'Monitoring your phone angle',
+      notificationTitle: notificationText.title,
+      notificationText: notificationText.body,
       callback: startPostureMonitoringCallback,
     );
 
@@ -267,6 +264,14 @@ class MonitoringService {
   static void alertMuteChanged() {
     if (!isSupported) return;
     FlutterForegroundTask.sendDataToTask(const {'command': 'alertMuteChanged'});
+  }
+
+  static void updateLanguage(String languageCode) {
+    if (!isSupported) return;
+    FlutterForegroundTask.sendDataToTask({
+      'command': 'language',
+      'languageCode': languageCode,
+    });
   }
 }
 
@@ -500,11 +505,12 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   }
 
   Future<void> _updateForegroundNotification() async {
+    final notificationText = await PostureNotificationService.foregroundText(
+      screenInteractive: _screenInteractive,
+    );
     await FlutterForegroundTask.updateService(
-      notificationTitle: 'Posture Guard is active',
-      notificationText: _screenInteractive
-          ? 'Monitoring your phone angle'
-          : 'Paused while the screen is off',
+      notificationTitle: notificationText.title,
+      notificationText: notificationText.body,
     );
   }
 
@@ -793,6 +799,11 @@ class PostureMonitoringTaskHandler extends TaskHandler {
 
     if (command == 'alertMuteChanged') {
       unawaited(_reloadMuteAndResetEpisode());
+      return;
+    }
+
+    if (command == 'language') {
+      unawaited(_updateForegroundNotification());
       return;
     }
 

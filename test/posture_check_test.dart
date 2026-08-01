@@ -60,12 +60,15 @@ void main() {
     expect(stableCalibrationAngle([30, 31, 30, 30, 31]), closeTo(30.333, 0.01));
   });
 
-  test('posture becomes bad when the phone is tilted too far below neutral', () {
-    final thresholds = calculatePostureThresholds(45);
-    final hysteresis = PostureHysteresis();
-    expect(hysteresis.update(20, thresholds), isTrue);
-    expect(hysteresis.update(40, thresholds), isFalse);
-  });
+  test(
+    'posture becomes bad when the phone is tilted too far below neutral',
+    () {
+      final thresholds = calculatePostureThresholds(45);
+      final hysteresis = PostureHysteresis();
+      expect(hysteresis.update(20, thresholds), isTrue);
+      expect(hysteresis.update(40, thresholds), isFalse);
+    },
+  );
 
   test('sensor angle is normalized and does not invert with rotation', () {
     final portrait = phoneAngleFromAccelerometer(x: 0, y: 5, z: 5);
@@ -74,24 +77,24 @@ void main() {
     expect(portrait, closeTo(45, 0.001));
     expect(landscape, closeTo(portrait!, 0.001));
     expect(upsideDownZ, closeTo(portrait, 0.001));
-    expect(
-      phoneAngleFromAccelerometer(x: 0, y: 0, z: 1),
-      closeTo(0, 0.001),
-    );
-    expect(
-      phoneAngleFromAccelerometer(x: 1, y: 0, z: 0),
-      closeTo(90, 0.001),
-    );
+    expect(phoneAngleFromAccelerometer(x: 0, y: 0, z: 1), closeTo(0, 0.001));
+    expect(phoneAngleFromAccelerometer(x: 1, y: 0, z: 0), closeTo(90, 0.001));
     expect(phoneAngleFromAccelerometer(x: double.nan, y: 0, z: 1), isNull);
     expect(phoneAngleFromAccelerometer(x: 0, y: 0, z: 0), isNull);
   });
 
-  test('stable calibration accepts reasonable angles and rejects noisy or invalid samples', () {
-    expect(stableCalibrationAngle([70, 71, 69, 70, 70]), closeTo(70, 0.01));
-    expect(stableCalibrationAngle([30, 31, 30, 30, 31]), closeTo(30.333, 0.01));
-    expect(stableCalibrationAngle([60, 70, 80]), isNull);
-    expect(stableCalibrationAngle([double.nan, 70]), isNull);
-  });
+  test(
+    'stable calibration accepts reasonable angles and rejects noisy or invalid samples',
+    () {
+      expect(stableCalibrationAngle([70, 71, 69, 70, 70]), closeTo(70, 0.01));
+      expect(
+        stableCalibrationAngle([30, 31, 30, 30, 31]),
+        closeTo(30.333, 0.01),
+      );
+      expect(stableCalibrationAngle([60, 70, 80]), isNull);
+      expect(stableCalibrationAngle([double.nan, 70]), isNull);
+    },
+  );
 
   test('alert scheduler repeats at frequency and resets on good posture', () {
     final scheduler = PostureAlertScheduler();

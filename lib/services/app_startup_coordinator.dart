@@ -29,18 +29,13 @@ class AppStartupCoordinator {
        _isMonitoringRunning =
            isMonitoringRunning ?? MonitoringService.isRunning,
        _startMonitoring = startMonitoring ?? MonitoringService.start,
-       _stopMonitoring = stopMonitoring ?? MonitoringService.stop,
-       _requestNotificationPermission =
-           requestNotificationPermission ??
-           MonitoringService.requestNotificationPermissionIfAppropriate;
+       _stopMonitoring = stopMonitoring ?? MonitoringService.stop;
 
   final TutorialPreferences _tutorialPreferences;
   final SettingsStore _settingsStore;
   final Future<bool> Function() _isMonitoringRunning;
   final Future<MonitoringActionResult> Function() _startMonitoring;
   final Future<MonitoringActionResult> Function() _stopMonitoring;
-  final Future<NotificationPermission> Function()
-  _requestNotificationPermission;
 
   Future<bool> hasCompletedTutorial() {
     return _tutorialPreferences.hasCompletedTutorial();
@@ -52,15 +47,6 @@ class AppStartupCoordinator {
     final settings = loadResult.settings;
     final saveResult = await _settingsStore.save(settings);
 
-    NotificationPermission? permission;
-    if (settings.monitoringEnabled) {
-      try {
-        permission = await _requestNotificationPermission();
-      } catch (_) {
-        permission = NotificationPermission.denied;
-      }
-    }
-
     return _applyStartupState(
       settings,
       initialWarning: _combineWarnings(
@@ -69,7 +55,6 @@ class AppStartupCoordinator {
             ? null
             : 'Your enabled settings were saved on this device, but cloud synchronization failed.',
       ),
-      notificationPermission: permission,
     );
   }
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/locale_controller.dart';
+
 class Shop extends StatelessWidget {
   const Shop({super.key});
 
@@ -50,7 +52,10 @@ class Shop extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(25),
                       ),
-                      child: const Text('Buy', style: TextStyle(fontSize: 25)),
+                      child: Text(
+                        context.l10n.buy,
+                        style: const TextStyle(fontSize: 25),
+                      ),
                     ),
                   ),
                 ],

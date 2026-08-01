@@ -74,8 +74,8 @@ void main() {
       PostureNotificationService.mute1HourActionId,
     ]);
     expect(actions.map((action) => action.title), [
-      'Mute for 15 min',
-      'Mute for 1 hour',
+      'Mute 15 min',
+      'Mute 1 hour',
     ]);
     for (final action in actions) {
       expect(action.showsUserInterface, isFalse);

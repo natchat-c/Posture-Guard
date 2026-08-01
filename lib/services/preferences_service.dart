@@ -20,6 +20,7 @@ class PreferenceKeys {
   static const String calibrationUpdatedAtEpochMs =
       'calibrationUpdatedAtEpochMs';
   static const String hasCompletedTutorial = 'hasCompletedTutorial';
+  static const String selectedLanguageCode = 'selectedLanguageCode';
   static const String notificationPermissionRequested =
       'notificationPermissionRequested';
   static const String cameraPermissionRequested = 'cameraPermissionRequested';
@@ -448,5 +449,28 @@ class TutorialPreferences {
 
   Future<void> markCompleted() async {
     await _preferences.setBool(PreferenceKeys.hasCompletedTutorial, true);
+  }
+}
+
+class LanguagePreferences {
+  LanguagePreferences({SharedPreferencesAsync? preferences})
+    : _preferences = preferences;
+
+  static const Set<String> supportedLanguageCodes = {'en', 'th'};
+
+  final SharedPreferencesAsync? _preferences;
+
+  SharedPreferencesAsync get _store => _preferences ?? SharedPreferencesAsync();
+
+  Future<String?> load() async {
+    final code = await _store.getString(PreferenceKeys.selectedLanguageCode);
+    return supportedLanguageCodes.contains(code) ? code : null;
+  }
+
+  Future<void> save(String code) async {
+    if (!supportedLanguageCodes.contains(code)) {
+      throw ArgumentError.value(code, 'code', 'Unsupported language code');
+    }
+    await _store.setString(PreferenceKeys.selectedLanguageCode, code);
   }
 }

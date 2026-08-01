@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/locale_controller.dart';
 import 'shop_page.dart';
 
 class Customizes extends StatelessWidget {
@@ -72,9 +73,9 @@ class Customizes extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(25),
                       ),
-                      child: const Text(
-                        'Buy more',
-                        style: TextStyle(fontSize: 25),
+                      child: Text(
+                        context.l10n.buyMore,
+                        style: const TextStyle(fontSize: 25),
                       ),
                     ),
                   ),
