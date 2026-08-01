@@ -11,6 +11,7 @@ import '../models/statistics_summary.dart';
 import '../services/device_screen_time_service.dart';
 import '../services/monitoring_service.dart';
 import '../services/statistics_repository.dart';
+import '../widgets/responsive_layout.dart';
 
 class Statistics extends StatefulWidget {
   const Statistics({
@@ -185,6 +186,7 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: Text(context.l10n.statistics)),
       body: StreamBuilder<Map<String, DailyStats>>(
         stream: widget.recordsStream ?? _repository!.watchAll(),
         builder: (context, snapshot) {
@@ -218,181 +220,240 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
   }) {
     final l10n = context.l10n;
     final scores = summary.scoresForPastSevenDays(records);
-    return SingleChildScrollView(
-      key: const Key('statisticsScrollView'),
-      physics: const ClampingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 35, 20, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 70,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Text(l10n.statistics, style: const TextStyle(fontSize: 42)),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: FloatingActionButton(
-                      heroTag: 'statisticsBackButton',
-                      onPressed: () => Navigator.pop(context),
-                      child: const Icon(Icons.arrow_back),
+    return SafeArea(
+      top: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final padding = constraints.responsiveHorizontalPadding;
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: ResponsiveBreakpoints.maxContentWidth,
+              ),
+              child: SingleChildScrollView(
+                key: const Key('statisticsScrollView'),
+                physics: const ClampingScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(padding, 16, padding, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (hasError)
+                      Card(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(l10n.statisticsRefreshWarning),
+                        ),
+                      ),
+                    _sectionTitle(l10n.today),
+                    _summaryCard([
+                      _Metric(
+                        l10n.deviceScreenTime,
+                        summary.todayDeviceScreenTimeSeconds == null
+                            ? l10n.unavailable
+                            : localizedDuration(
+                                l10n,
+                                summary.todayDeviceScreenTimeSeconds!,
+                              ),
+                      ),
+                      _Metric(
+                        l10n.monitoredTime,
+                        localizedDuration(
+                          l10n,
+                          summary.today.monitoredTimeSeconds,
+                        ),
+                      ),
+                      _Metric(
+                        l10n.goodPostureTime,
+                        localizedDuration(
+                          l10n,
+                          summary.today.goodPostureSeconds,
+                        ),
+                      ),
+                      _Metric(
+                        l10n.badPosture,
+                        localizedDuration(
+                          l10n,
+                          summary.today.badPostureSeconds,
+                        ),
+                      ),
+                      _Metric(
+                        l10n.postureScore,
+                        summary.today.hasTrackedPosture
+                            ? '${summary.today.dailyScore.round()}%'
+                            : l10n.noData,
+                      ),
+                      _Metric(
+                        l10n.alertsSent,
+                        summary.today.alertsSentCount.toString(),
+                      ),
+                    ], key: const Key('statisticsTodaySummary')),
+                    const SizedBox(height: 24),
+                    _sectionTitle(l10n.pastSevenDays),
+                    const SizedBox(height: 8),
+                    _dateLabels(summary.pastSevenDays),
+                    const SizedBox(height: 12),
+                    ConstrainedBox(
+                      key: const Key('statisticsScoreChart'),
+                      constraints: const BoxConstraints(maxHeight: 240),
+                      child: AspectRatio(
+                        aspectRatio: 1.55,
+                        child: _scoreChart(scores),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    _summaryCard([
+                      _Metric(
+                        l10n.averageScore,
+                        _formatScore(summary.pastSeven.averageDailyScore),
+                      ),
+                      _Metric(
+                        l10n.averageMonitoredTime,
+                        summary
+                                    .pastSeven
+                                    .averageMonitoredSecondsPerTrackedDay ==
+                                null
+                            ? l10n.noData
+                            : localizedDuration(
+                                l10n,
+                                summary
+                                    .pastSeven
+                                    .averageMonitoredSecondsPerTrackedDay!
+                                    .round(),
+                              ),
+                      ),
+                      _Metric(
+                        l10n.totalGoodPosture,
+                        localizedDuration(
+                          l10n,
+                          summary.pastSeven.totalGoodSeconds,
+                        ),
+                      ),
+                      _Metric(
+                        l10n.totalBadPosture,
+                        localizedDuration(
+                          l10n,
+                          summary.pastSeven.totalBadSeconds,
+                        ),
+                      ),
+                      _Metric(
+                        l10n.daysTracked,
+                        summary.pastSeven.trackedDays.toString(),
+                      ),
+                      _Metric(
+                        l10n.alertsSent,
+                        summary.pastSeven.alertsSent.toString(),
+                      ),
+                    ], key: const Key('statisticsSevenDaySummary')),
+                    const SizedBox(height: 24),
+                    _sectionTitle(l10n.pastVsPrevious),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          _trendText(summary),
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _sectionTitle(l10n.allTime),
+                    Text(
+                      l10n.sinceStarted,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    _summaryCard([
+                      _Metric(
+                        l10n.daysTracked,
+                        summary.allTime.daysTracked.toString(),
+                      ),
+                      _Metric(
+                        l10n.totalMonitoredTime,
+                        localizedDuration(
+                          l10n,
+                          summary.allTime.totalMonitoredSeconds,
+                        ),
+                      ),
+                      _Metric(
+                        l10n.totalGoodPosture,
+                        localizedDuration(
+                          l10n,
+                          summary.allTime.totalGoodSeconds,
+                        ),
+                      ),
+                      _Metric(
+                        l10n.totalBadPosture,
+                        localizedDuration(
+                          l10n,
+                          summary.allTime.totalBadSeconds,
+                        ),
+                      ),
+                      _Metric(
+                        l10n.weightedScore,
+                        _formatScore(summary.allTime.weightedScore),
+                      ),
+                      _Metric(
+                        l10n.bestDay,
+                        _bestDayText(summary.allTime.bestDay),
+                      ),
+                    ], key: const Key('statisticsAllTimeSummary')),
+                    if (records.values.every(
+                      (stats) => !stats.hasTrackedPosture,
+                    )) ...[
+                      const SizedBox(height: 16),
+                      Text(l10n.noHistory, textAlign: TextAlign.center),
+                    ],
+                  ],
                 ),
-              ],
-            ),
-          ),
-          if (hasError)
-            Card(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(l10n.statisticsRefreshWarning),
               ),
             ),
-          const SizedBox(height: 16),
-          _sectionTitle(l10n.today),
-          _summaryCard([
-            _Metric(
-              l10n.deviceScreenTime,
-              summary.todayDeviceScreenTimeSeconds == null
-                  ? l10n.unavailable
-                  : localizedDuration(
-                      l10n,
-                      summary.todayDeviceScreenTimeSeconds!,
-                    ),
-            ),
-            _Metric(
-              l10n.monitoredTime,
-              localizedDuration(l10n, summary.today.monitoredTimeSeconds),
-            ),
-            _Metric(
-              l10n.goodPostureTime,
-              localizedDuration(l10n, summary.today.goodPostureSeconds),
-            ),
-            _Metric(
-              l10n.badPosture,
-              localizedDuration(l10n, summary.today.badPostureSeconds),
-            ),
-            _Metric(
-              l10n.postureScore,
-              summary.today.hasTrackedPosture
-                  ? '${summary.today.dailyScore.round()}%'
-                  : l10n.noData,
-            ),
-            _Metric(l10n.alertsSent, summary.today.alertsSentCount.toString()),
-          ]),
-          const SizedBox(height: 24),
-          _sectionTitle(l10n.pastSevenDays),
-          const SizedBox(height: 8),
-          _dateLabels(summary.pastSevenDays),
-          const SizedBox(height: 12),
-          SizedBox(height: 220, child: _scoreChart(scores)),
-          const SizedBox(height: 16),
-          _summaryCard([
-            _Metric(
-              l10n.averageScore,
-              _formatScore(summary.pastSeven.averageDailyScore),
-            ),
-            _Metric(
-              l10n.averageMonitoredTime,
-              summary.pastSeven.averageMonitoredSecondsPerTrackedDay == null
-                  ? l10n.noData
-                  : localizedDuration(
-                      l10n,
-                      summary.pastSeven.averageMonitoredSecondsPerTrackedDay!
-                          .round(),
-                    ),
-            ),
-            _Metric(
-              l10n.totalGoodPosture,
-              localizedDuration(l10n, summary.pastSeven.totalGoodSeconds),
-            ),
-            _Metric(
-              l10n.totalBadPosture,
-              localizedDuration(l10n, summary.pastSeven.totalBadSeconds),
-            ),
-            _Metric(l10n.daysTracked, summary.pastSeven.trackedDays.toString()),
-            _Metric(l10n.alertsSent, summary.pastSeven.alertsSent.toString()),
-          ]),
-          const SizedBox(height: 24),
-          _sectionTitle(l10n.pastVsPrevious),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                _trendText(summary),
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          _sectionTitle(l10n.allTime),
-          Text(
-            l10n.sinceStarted,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 8),
-          _summaryCard([
-            _Metric(l10n.daysTracked, summary.allTime.daysTracked.toString()),
-            _Metric(
-              l10n.totalMonitoredTime,
-              localizedDuration(l10n, summary.allTime.totalMonitoredSeconds),
-            ),
-            _Metric(
-              l10n.totalGoodPosture,
-              localizedDuration(l10n, summary.allTime.totalGoodSeconds),
-            ),
-            _Metric(
-              l10n.totalBadPosture,
-              localizedDuration(l10n, summary.allTime.totalBadSeconds),
-            ),
-            _Metric(
-              l10n.weightedScore,
-              _formatScore(summary.allTime.weightedScore),
-            ),
-            _Metric(l10n.bestDay, _bestDayText(summary.allTime.bestDay)),
-          ]),
-          if (records.values.every((stats) => !stats.hasTrackedPosture)) ...[
-            const SizedBox(height: 16),
-            Text(l10n.noHistory, textAlign: TextAlign.center),
-          ],
-        ],
+          );
+        },
       ),
     );
   }
 
   Widget _sectionTitle(String text) {
-    return Text(text, style: const TextStyle(fontSize: 25));
+    return Text(text, style: Theme.of(context).textTheme.titleLarge);
   }
 
-  Widget _summaryCard(List<_Metric> metrics) {
+  Widget _summaryCard(List<_Metric> metrics, {Key? key}) {
     return Card(
+      key: key,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: metrics
-              .map(
-                (metric) => Padding(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final textScale = MediaQuery.textScalerOf(context).scale(1);
+            final stacked = constraints.maxWidth < 310 || textScale >= 1.3;
+            return Column(
+              children: metrics.map((metric) {
+                final label = Text(metric.label);
+                final value = Text(
+                  metric.value,
+                  textAlign: stacked ? TextAlign.left : TextAlign.right,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                );
+                return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 5),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text(metric.label)),
-                      const SizedBox(width: 12),
-                      Text(
-                        metric.value,
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              .toList(),
+                  child: stacked
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [label, const SizedBox(height: 2), value],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: label),
+                            const SizedBox(width: 12),
+                            Flexible(child: value),
+                          ],
+                        ),
+                );
+              }).toList(),
+            );
+          },
         ),
       ),
     );
@@ -403,10 +464,13 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
       children: dates
           .map(
             (date) => Expanded(
-              child: Text(
-                '${_weekday(date.weekday)}\n${date.day}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '${_weekday(date.weekday)}\n${date.day}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
             ),
           )

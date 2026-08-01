@@ -21,6 +21,7 @@ import '../services/monitoring_service.dart';
 import '../services/preferences_service.dart';
 import '../services/statistics_repository.dart';
 import '../widgets/coach_mark_overlay.dart';
+import '../widgets/responsive_layout.dart';
 import 'customize_page.dart';
 import 'settings_page.dart';
 import 'statistics_page.dart';
@@ -33,6 +34,7 @@ class MyHomePage extends StatefulWidget {
     @visibleForTesting this.settingsStore,
     @visibleForTesting this.screenTimeProvider,
     @visibleForTesting this.initialPostureStatus = 'GOOD',
+    @visibleForTesting this.initialMonitoringActive = true,
   });
 
   final bool showTourOnStart;
@@ -40,6 +42,7 @@ class MyHomePage extends StatefulWidget {
   final SettingsStore? settingsStore;
   final DeviceScreenTimeProvider? screenTimeProvider;
   final String initialPostureStatus;
+  final bool initialMonitoringActive;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -56,7 +59,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   final CameraFrameStability _cameraFrameStability = CameraFrameStability();
   late final DeviceScreenTimeProvider _deviceScreenTimeProvider;
   final PresentationTicker _presentationTicker = PresentationTicker();
-  final ScrollController _scrollController = ScrollController();
   final GlobalKey _helpTourKey = GlobalKey();
   final GlobalKey _settingsTourKey = GlobalKey();
   final GlobalKey _statusTourKey = GlobalKey();
@@ -127,7 +129,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     _liveTimes = HomeLiveTimes(dateKey: _activeDateKey);
     if (widget.testMode) {
       _initializing = false;
-      _monitoringActive = true;
+      _monitoringActive = widget.initialMonitoringActive;
       return;
     }
     _statisticsRepository = StatisticsRepository();
@@ -953,15 +955,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (step == null || _preparedTourStep == step) return;
     _preparedTourStep = step;
     await WidgetsBinding.instance.endOfFrame;
-    final targetContext = _tourKeyForStep(step)?.currentContext;
-    if (targetContext != null && targetContext.mounted) {
-      await Scrollable.ensureVisible(
-        targetContext,
-        alignment: 0.35,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    }
     if (mounted) setState(() {});
   }
 
@@ -1035,7 +1028,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     _serviceStateTimer?.cancel();
     _deviceScreenTimeRefreshTimer?.cancel();
     _presentationTicker.dispose();
-    _scrollController.dispose();
     unawaited(_disposeCameraResources());
     super.dispose();
   }
@@ -1067,264 +1059,384 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     final home = Scaffold(
       body: SafeArea(
-        child: ListView(
-          controller: _scrollController,
-          key: const Key('homeScrollView'),
-          physics: const ClampingScrollPhysics(),
-          padding: EdgeInsets.zero,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 18, left: 20, right: 20),
-              child: Row(
-                children: [
-                  SizedBox(
-                    key: _coinTourKey,
-                    width: 75,
-                    height: 40,
-                    child: FloatingActionButton.extended(
-                      key: const Key('homeCoinBalance'),
-                      heroTag: 'homeCoinsButton',
-                      onPressed: null,
-                      icon: const Icon(Icons.monetization_on_rounded),
-                      label: Text('$_totalCoins'),
-                    ),
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    key: _helpTourKey,
-                    width: 40,
-                    height: 40,
-                    child: FloatingActionButton(
-                      key: const Key('homeHelpButton'),
-                      heroTag: 'homeHelpButton',
-                      tooltip: l10n.helpTooltip,
-                      onPressed: () {
-                        if (_tourStep == 3) {
-                          _moveTour(1);
-                        } else {
-                          _startHomeTour();
-                        }
-                      },
-                      child: const Icon(Icons.question_mark),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    key: _settingsTourKey,
-                    width: 40,
-                    height: 40,
-                    child: FloatingActionButton(
-                      key: const Key('homeSettingsButton'),
-                      heroTag: 'homeSettingsButton',
-                      tooltip: l10n.settings,
-                      onPressed: _openSettings,
-                      child: const Icon(Icons.settings),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Column(
-              key: _statusTourKey,
-              children: [
-                Text(
-                  l10n.status.toUpperCase(),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: SizedBox(
-                    height: 56,
-                    child: Center(
-                      child: Text(
-                        _localizedPostureStatus(),
-                        key: const Key('homePostureStatus'),
-                        maxLines: 2,
-                        overflow: TextOverflow.fade,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 40,
-                          height: 1.05,
-                          fontWeight: FontWeight.bold,
-                          color: _statusColor(),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: 22,
-                  child: Text(
-                    _localizedPostureHint(),
-                    key: const Key('homePostureHint'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-                Text(
-                  l10n.score(_stats.dailyScore.round()),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ],
-            ),
-            if (_cameraStatusMessage != null)
-              Text(
-                _cameraStatusMessage!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13),
-              ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: _statusColor().withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(28),
-                ),
-                child: SizedBox(
-                  key: const Key('homeCharacterArtwork'),
-                  height: 250,
-                  child: Image.asset(
-                    'images/happy slime.png',
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.access_time_filled, size: 30),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _showDeviceScreenTime
-                                    ? l10n.deviceScreenTime
-                                    : l10n.monitoredTime,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                              Text(
-                                _formatTime(
-                                  _showDeviceScreenTime
-                                      ? _liveTimes.deviceScreenTimeSeconds!
-                                      : _liveTimes.monitoredSeconds,
-                                ),
-                                style: const TextStyle(fontSize: 18),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.sentiment_dissatisfied_sharp,
-                          size: 30,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                l10n.badPosture,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                              Text(
-                                _formatTime(_liveTimes.badPostureSeconds),
-                                style: const TextStyle(fontSize: 18),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 60,
-                      child: FloatingActionButton(
-                        key: const Key('homeCustomizeButton'),
-                        heroTag: 'homeCustomizeButton',
-                        onPressed: () async {
-                          await Navigator.push<void>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const Customizes(),
+        child: LayoutBuilder(
+          key: const Key('homeLayout'),
+          builder: (context, constraints) {
+            final horizontalPadding = constraints.responsiveHorizontalPadding;
+            final isShort = constraints.isShortPhone;
+            const controlHeight = 48.0;
+            final actionHeight = isShort ? 64.0 : 68.0;
+            final sectionGap = isShort ? 6.0 : 10.0;
+            final metricIconSize = constraints.isVerySmallPhone ? 24.0 : 26.0;
+            final metricLabelSize = constraints.isVerySmallPhone ? 12.0 : 13.0;
+            final metricValueSize = isShort ? 22.0 : 24.0;
+
+            Widget timeMetric({
+              required IconData icon,
+              required String label,
+              required String value,
+            }) {
+              return Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: metricIconSize),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            maxLines: 2,
+                            style: TextStyle(
+                              fontSize: metricLabelSize,
+                              height: 1.1,
                             ),
-                          );
-                          if (mounted) await _refreshPresentationSources();
-                        },
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        child: Text(
-                          l10n.customize.toUpperCase(),
-                          style: const TextStyle(fontSize: 22),
-                        ),
+                          ),
+                          Text(
+                            value,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: metricValueSize,
+                              height: 1.05,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                  ],
+                ),
+              );
+            }
+
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+              child: Column(
+                children: [
+                  Padding(
+                    key: const Key('homeTopControls'),
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Row(
+                      children: [
+                        ConstrainedBox(
+                          key: _coinTourKey,
+                          constraints: const BoxConstraints(maxWidth: 104),
+                          child: SizedBox(
+                            height: controlHeight,
+                            child: FloatingActionButton.extended(
+                              key: const Key('homeCoinBalance'),
+                              heroTag: 'homeCoinsButton',
+                              onPressed: null,
+                              icon: const Icon(Icons.monetization_on_rounded),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('$_totalCoins'),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        SizedBox(
+                          key: _helpTourKey,
+                          width: controlHeight,
+                          height: controlHeight,
+                          child: FloatingActionButton(
+                            key: const Key('homeHelpButton'),
+                            heroTag: 'homeHelpButton',
+                            tooltip: l10n.helpTooltip,
+                            onPressed: () {
+                              if (_tourStep == 3) {
+                                _moveTour(1);
+                              } else {
+                                _startHomeTour();
+                              }
+                            },
+                            child: const Icon(Icons.question_mark),
+                          ),
+                        ),
+                        SizedBox(width: constraints.isVerySmallPhone ? 6 : 10),
+                        SizedBox(
+                          key: _settingsTourKey,
+                          width: controlHeight,
+                          height: controlHeight,
+                          child: FloatingActionButton(
+                            key: const Key('homeSettingsButton'),
+                            heroTag: 'homeSettingsButton',
+                            tooltip: l10n.settings,
+                            onPressed: _openSettings,
+                            child: const Icon(Icons.settings),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 15),
-                  SizedBox(
-                    width: 60,
-                    height: 60,
-                    child: FloatingActionButton(
-                      key: const Key('homeStatisticsButton'),
-                      heroTag: 'homeStatisticsButton',
-                      tooltip: l10n.statistics,
-                      onPressed: () async {
-                        await Navigator.push<void>(
+                  SizedBox(height: sectionGap),
+                  Expanded(
+                    key: const Key('homeMiddleContent'),
+                    child: LayoutBuilder(
+                      builder: (context, middleConstraints) {
+                        const characterAspectRatio = 765 / 611;
+                        final textScale = MediaQuery.textScalerOf(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) => Statistics(
-                              screenTimeProvider: _deviceScreenTimeProvider,
-                            ),
+                        ).scale(1);
+                        final statusFontSize = switch (constraints.maxHeight) {
+                          < 620 => 32.0,
+                          < 760 => 36.0,
+                          _ => 40.0,
+                        };
+                        final scoreFontSize = isShort ? 20.0 : 22.0;
+                        final helperFontSize = isShort ? 13.0 : 15.0;
+                        final hint = _localizedPostureHint();
+                        final statusLines = _monitoringActive ? 1.0 : 2.0;
+                        final statusBudget =
+                            17 * textScale +
+                            3 +
+                            statusFontSize * 1.05 * statusLines * textScale +
+                            5 +
+                            scoreFontSize * 1.15 * textScale +
+                            (hint.isEmpty
+                                ? 0
+                                : 4 + helperFontSize * 2.2 * textScale);
+                        final metricsBudget = max(58.0, 54 * textScale);
+                        final cameraBudget = _cameraStatusMessage == null
+                            ? 0.0
+                            : 34 * textScale;
+                        final imageGap = isShort ? 6.0 : 16.0;
+                        final metricsGap = isShort ? 6.0 : 12.0;
+                        final accessibilityReserve = max(
+                          0.0,
+                          min(48.0, (textScale - 1) * 112),
+                        );
+                        final characterRoom = max(
+                          0.0,
+                          middleConstraints.maxHeight -
+                              statusBudget -
+                              metricsBudget -
+                              cameraBudget -
+                              imageGap -
+                              metricsGap -
+                              accessibilityReserve,
+                        );
+                        final characterHeight = min(
+                          min(
+                            constraints.maxHeight * (isShort ? 0.36 : 0.42),
+                            constraints.maxWidth / characterAspectRatio,
+                          ),
+                          min(330.0, characterRoom),
+                        );
+
+                        return Align(
+                          alignment: isShort
+                              ? Alignment.topCenter
+                              : const Alignment(0, -0.4),
+                          child: Column(
+                            key: const Key('homeCompactContent'),
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              KeyedSubtree(
+                                key: _statusTourKey,
+                                child: Column(
+                                  key: const Key('homeStatusSection'),
+                                  children: [
+                                    Text(
+                                      l10n.status.toUpperCase(),
+                                      key: const Key('homeStatusHeading'),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 360,
+                                      ),
+                                      child: Text(
+                                        _localizedPostureStatus(),
+                                        key: const Key('homePostureStatus'),
+                                        maxLines: 2,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: statusFontSize,
+                                          height: 1.05,
+                                          fontWeight: FontWeight.bold,
+                                          color: _statusColor(),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      l10n.score(_stats.dailyScore.round()),
+                                      key: const Key('homeScore'),
+                                      maxLines: 1,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: scoreFontSize,
+                                        height: 1.05,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    if (hint.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          hint,
+                                          key: const Key('homePostureHint'),
+                                          maxLines: 2,
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: helperFontSize,
+                                            height: 1.1,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              if (_cameraStatusMessage != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 3),
+                                  child: Text(
+                                    _cameraStatusMessage!,
+                                    maxLines: 2,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ),
+                              SizedBox(height: imageGap),
+                              SizedBox(
+                                height: max(0, characterHeight),
+                                child: OverflowBox(
+                                  maxWidth: constraints.maxWidth,
+                                  child: SizedBox(
+                                    key: const Key('homeCharacterArtwork'),
+                                    width:
+                                        max(0, characterHeight) *
+                                        characterAspectRatio,
+                                    height: max(0, characterHeight),
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: _statusColor().withValues(
+                                          alpha: 0.08,
+                                        ),
+                                        borderRadius: BorderRadius.circular(28),
+                                      ),
+                                      child: Image.asset(
+                                        'images/happy slime.png',
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: metricsGap),
+                              Row(
+                                key: const Key('homeTimeMetrics'),
+                                children: [
+                                  timeMetric(
+                                    icon: Icons.access_time_filled,
+                                    label: _showDeviceScreenTime
+                                        ? l10n.deviceScreenTime
+                                        : l10n.monitoredTime,
+                                    value: _formatTime(
+                                      _showDeviceScreenTime
+                                          ? _liveTimes.deviceScreenTimeSeconds!
+                                          : _liveTimes.monitoredSeconds,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  timeMetric(
+                                    icon: Icons.sentiment_dissatisfied_sharp,
+                                    label: l10n.badPosture,
+                                    value: _formatTime(
+                                      _liveTimes.badPostureSeconds,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         );
-                        if (mounted) await _refreshPresentationSources();
                       },
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: const Icon(Icons.equalizer),
+                    ),
+                  ),
+                  Padding(
+                    key: const Key('homeBottomActions'),
+                    padding: EdgeInsets.only(bottom: isShort ? 4 : 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 4,
+                          child: SizedBox(
+                            height: actionHeight,
+                            child: FloatingActionButton(
+                              key: const Key('homeCustomizeButton'),
+                              heroTag: 'homeCustomizeButton',
+                              onPressed: () async {
+                                await Navigator.push<void>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const Customizes(),
+                                  ),
+                                );
+                                if (mounted) {
+                                  await _refreshPresentationSources();
+                                }
+                              },
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  l10n.customize.toUpperCase(),
+                                  style: const TextStyle(fontSize: 19),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: actionHeight,
+                            child: FloatingActionButton(
+                              key: const Key('homeStatisticsButton'),
+                              heroTag: 'homeStatisticsButton',
+                              tooltip: l10n.statistics,
+                              onPressed: () async {
+                                await Navigator.push<void>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => Statistics(
+                                      screenTimeProvider:
+                                          _deviceScreenTimeProvider,
+                                    ),
+                                  ),
+                                );
+                                if (mounted) {
+                                  await _refreshPresentationSources();
+                                }
+                              },
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: const Icon(Icons.equalizer),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );

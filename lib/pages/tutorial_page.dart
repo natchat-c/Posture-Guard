@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/locale_controller.dart';
 import '../services/calibration_service.dart';
+import '../widgets/responsive_layout.dart';
 
 class TutorialPage extends StatefulWidget {
   const TutorialPage({
@@ -93,72 +94,105 @@ class _TutorialPageState extends State<TutorialPage> {
     Widget? action,
     Widget? feedback,
   }) {
-    return SingleChildScrollView(
-      key: Key('tutorialPageScroll$pageIndex'),
-      physics: const ClampingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(28, 42, 28, 24),
-      child: Column(
-        children: [
-          Icon(icon, size: 92, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(height: 32),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineMedium,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final padding = constraints.responsiveHorizontalPadding;
+        final isShort = constraints.isShortPhone;
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: SingleChildScrollView(
+              key: Key('tutorialPageScroll$pageIndex'),
+              physics: const ClampingScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                padding,
+                isShort ? 16 : 36,
+                padding,
+                24,
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    icon,
+                    size: isShort ? 64 : 80,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  SizedBox(height: isShort ? 16 : 28),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    body,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  if (action != null) ...[const SizedBox(height: 24), action],
+                  if (feedback != null) ...[
+                    const SizedBox(height: 18),
+                    feedback,
+                  ],
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 18),
-          Text(
-            body,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-          if (action != null) ...[const SizedBox(height: 28), action],
-          if (feedback != null) ...[const SizedBox(height: 18), feedback],
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _postureStatesPage() {
     final l10n = context.l10n;
-    return SingleChildScrollView(
-      key: const Key('tutorialPageScroll2'),
-      physics: const ClampingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-      child: Column(
-        children: [
-          Icon(
-            Icons.accessibility_new_rounded,
-            size: 64,
-            color: Theme.of(context).colorScheme.primary,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final padding = constraints.responsiveHorizontalPadding;
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: SingleChildScrollView(
+              key: const Key('tutorialPageScroll2'),
+              physics: const ClampingScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(padding, 16, padding, 20),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.accessibility_new_rounded,
+                    size: constraints.isShortPhone ? 52 : 64,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.knowPostureTitle,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 14),
+                  _PostureStateCard(
+                    key: const Key('tutorialGoodState'),
+                    color: Colors.green,
+                    icon: Icons.sentiment_satisfied_alt_rounded,
+                    text: l10n.goodPostureExplanation,
+                  ),
+                  _PostureStateCard(
+                    key: const Key('tutorialWarningState'),
+                    color: Colors.orange,
+                    icon: Icons.warning_amber_rounded,
+                    text: l10n.warningPostureExplanation,
+                  ),
+                  _PostureStateCard(
+                    key: const Key('tutorialBadState'),
+                    color: Colors.red,
+                    icon: Icons.sentiment_dissatisfied_rounded,
+                    text: l10n.badPostureExplanation,
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 14),
-          Text(
-            l10n.knowPostureTitle,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 16),
-          _PostureStateCard(
-            key: const Key('tutorialGoodState'),
-            color: Colors.green,
-            icon: Icons.sentiment_satisfied_alt_rounded,
-            text: l10n.goodPostureExplanation,
-          ),
-          _PostureStateCard(
-            key: const Key('tutorialWarningState'),
-            color: Colors.orange,
-            icon: Icons.warning_amber_rounded,
-            text: l10n.warningPostureExplanation,
-          ),
-          _PostureStateCard(
-            key: const Key('tutorialBadState'),
-            color: Colors.red,
-            icon: Icons.sentiment_dissatisfied_rounded,
-            text: l10n.badPostureExplanation,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -238,30 +272,47 @@ class _TutorialPageState extends State<TutorialPage> {
                 ),
               ),
             ),
-            SafeArea(
-              top: false,
-              minimum: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  if (_page > 0 && !widget.isReplay)
-                    TextButton.icon(
-                      key: const Key('tutorialBackButton'),
-                      onPressed: _finishing ? null : () => _goTo(_page - 1),
-                      icon: const Icon(Icons.arrow_back),
-                      label: Text(l10n.back),
-                    ),
-                  const Spacer(),
-                  FilledButton(
-                    key: const Key('tutorialNextButton'),
-                    onPressed: _finishing ? null : _next,
-                    child: Text(
-                      isLast
-                          ? (widget.isReplay ? l10n.done : l10n.continueButton)
-                          : l10n.next,
-                    ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final showBack = _page > 0 && !widget.isReplay;
+                final padding = constraints.responsiveHorizontalPadding;
+                return Padding(
+                  key: const Key('tutorialBottomActions'),
+                  padding: EdgeInsets.fromLTRB(padding, 12, padding, 16),
+                  child: Row(
+                    children: [
+                      if (showBack)
+                        Expanded(
+                          child: TextButton.icon(
+                            key: const Key('tutorialBackButton'),
+                            onPressed: _finishing
+                                ? null
+                                : () => _goTo(_page - 1),
+                            icon: const Icon(Icons.arrow_back),
+                            label: Text(l10n.back, textAlign: TextAlign.center),
+                          ),
+                        )
+                      else
+                        const Spacer(),
+                      if (showBack) const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          key: const Key('tutorialNextButton'),
+                          onPressed: _finishing ? null : _next,
+                          child: Text(
+                            isLast
+                                ? (widget.isReplay
+                                      ? l10n.done
+                                      : l10n.continueButton)
+                                : l10n.next,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ],
         ),

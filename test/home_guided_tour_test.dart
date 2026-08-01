@@ -77,7 +77,12 @@ void main() {
     await tester.pumpWidget(_homeApp());
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('homeScrollView')), findsOneWidget);
+    final home = find.byKey(const Key('homeLayout'));
+    expect(home, findsOneWidget);
+    expect(
+      find.descendant(of: home, matching: find.byType(Scrollable)),
+      findsNothing,
+    );
     expect(find.text('Open Settings'), findsOneWidget);
     expect(find.byKey(const Key('homeTourNextButton')), findsNothing);
 

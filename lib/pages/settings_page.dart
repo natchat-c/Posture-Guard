@@ -12,6 +12,7 @@ import '../services/device_screen_time_service.dart';
 import '../services/monitoring_service.dart';
 import '../services/preferences_service.dart';
 import '../widgets/coach_mark_overlay.dart';
+import '../widgets/responsive_layout.dart';
 
 enum SettingsTourResult { completed, back, skipped }
 
@@ -617,388 +618,461 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
       bottomNavigationBar: _loading
           ? null
           : SafeArea(
-              minimum: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-              child: FilledButton.icon(
-                key: const Key('saveSettingsButton'),
-                onPressed:
-                    _saving ||
-                        _applyingImmediateSetting ||
-                        _changingMonitoringState
-                    ? null
-                    : _save,
-                icon: _saving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save_outlined),
-                label: Text(_saving ? l10n.saving : l10n.saveSettings),
-              ),
-            ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-              key: _formKey,
-              child: SingleChildScrollView(
-                key: const Key('settingsScrollView'),
-                physics: const ClampingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_loadWarning != null)
-                      Card(
-                        color: Theme.of(context).colorScheme.errorContainer,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(_loadWarning!),
-                        ),
-                      ),
-                    Text(
-                      l10n.language,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    KeyedSubtree(
-                      key: _languageTourKey,
-                      child: DropdownButtonFormField<String>(
-                        key: const Key('languageSelector'),
-                        initialValue: selectedLanguage,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                        ),
-                        items: [
-                          DropdownMenuItem(
-                            value: 'en',
-                            child: Text(l10n.english),
-                          ),
-                          DropdownMenuItem(value: 'th', child: Text(l10n.thai)),
-                        ],
-                        onChanged: (code) async {
-                          if (code == null || code == selectedLanguage) return;
-                          await context.localeController?.selectLanguage(code);
-                        },
-                      ),
-                    ),
-                    const Divider(height: 32),
-                    KeyedSubtree(
-                      key: _monitoringTourKey,
-                      child: SwitchListTile(
-                        key: const Key('monitoringEnabledSwitch'),
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(l10n.monitoringEnabledSetting),
-                        subtitle: Text(
-                          !_settings.monitoringEnabled
-                              ? l10n.monitoringDisabledDescription
-                              : _monitoringActive
-                              ? l10n.monitoringActiveDescription
-                              : l10n.monitoringWaitingDescription,
-                        ),
-                        value: _settings.monitoringEnabled,
-                        onChanged:
-                            _saving ||
-                                _applyingImmediateSetting ||
-                                _changingMonitoringState ||
-                                widget.onMonitoringEnabledChanged == null
-                            ? null
-                            : _setMonitoringEnabled,
-                      ),
-                    ),
-                    const Divider(height: 32),
-                    KeyedSubtree(
-                      key: _notificationsTourKey,
-                      child: SwitchListTile(
-                        key: const Key('alertsEnabledSwitch'),
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(l10n.sendNotifications),
-                        subtitle: Text(l10n.notificationsDisabledDescription),
-                        value: _settings.alertsEnabled,
-                        onChanged:
+              top: false,
+              child: Center(
+                heightFactor: 1,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: ResponsiveBreakpoints.maxContentWidth,
+                  ),
+                  child: Padding(
+                    key: const Key('settingsBottomAction'),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: FilledButton.icon(
+                        key: const Key('saveSettingsButton'),
+                        onPressed:
                             _saving ||
                                 _applyingImmediateSetting ||
                                 _changingMonitoringState
                             ? null
-                            : _setAlertsEnabled,
+                            : _save,
+                        icon: _saving
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined),
+                        label: Text(
+                          _saving ? l10n.saving : l10n.saveSettings,
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
-                    if (_settings.alertsEnabled &&
-                        _notificationPermissionResolved &&
-                        !_notificationGranted)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: OutlinedButton.icon(
-                          key: const Key('allowNotificationAccessButton'),
-                          onPressed:
-                              _checkingNotificationPermission ||
-                                  _notificationPermissionAttempted
-                              ? null
-                              : _requestNotificationAccess,
-                          icon: _checkingNotificationPermission
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.notifications_outlined),
-                          label: Text(l10n.allowNotifications),
+                  ),
+                ),
+              ),
+            ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final padding = constraints.responsiveHorizontalPadding;
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: ResponsiveBreakpoints.maxContentWidth,
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: SingleChildScrollView(
+                        key: const Key('settingsScrollView'),
+                        physics: const ClampingScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          padding,
+                          16,
+                          padding,
+                          32 + MediaQuery.viewInsetsOf(context).bottom,
                         ),
-                      ),
-                    if (_alertsMutedUntil case final mutedUntil?) ...[
-                      Padding(
-                        key: const Key('temporaryAlertMuteStatus'),
-                        padding: const EdgeInsets.only(left: 16, bottom: 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                l10n.alertsMutedUntil(
-                                  TimeOfDay.fromDateTime(
-                                    mutedUntil,
-                                  ).format(context),
-                                ),
-                              ),
-                            ),
-                            TextButton(
-                              key: const Key('unmuteAlertsButton'),
-                              onPressed: _unmuteAlerts,
-                              child: Text(l10n.unmuteNow),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (_screenTimeSupported)
-                      KeyedSubtree(
-                        key: _screenTimeTourKey,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const Divider(height: 32),
-                            Padding(
-                              key: const Key('deviceScreenTimeSetting'),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.screen_lock_portrait_outlined,
+                            if (_loadWarning != null)
+                              Card(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.errorContainer,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Text(_loadWarning!),
+                                ),
+                              ),
+                            Text(
+                              l10n.language,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            KeyedSubtree(
+                              key: _languageTourKey,
+                              child: DropdownButtonFormField<String>(
+                                key: const Key('languageSelector'),
+                                initialValue: selectedLanguage,
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: [
+                                  DropdownMenuItem(
+                                    value: 'en',
+                                    child: Text(l10n.english),
                                   ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          l10n.useDeviceScreenTime,
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.titleMedium,
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(l10n.deviceScreenTimePrivacy),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          _hasUsageAccess
-                                              ? l10n.accessGranted
-                                              : l10n.accessNotGranted,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                  DropdownMenuItem(
+                                    value: 'th',
+                                    child: Text(l10n.thai),
                                   ),
                                 ],
+                                onChanged: (code) async {
+                                  if (code == null ||
+                                      code == selectedLanguage) {
+                                    return;
+                                  }
+                                  await context.localeController
+                                      ?.selectLanguage(code);
+                                },
                               ),
                             ),
-                            if (!_hasUsageAccess)
+                            const Divider(height: 32),
+                            KeyedSubtree(
+                              key: _monitoringTourKey,
+                              child: SwitchListTile(
+                                key: const Key('monitoringEnabledSwitch'),
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(l10n.monitoringEnabledSetting),
+                                subtitle: Text(
+                                  !_settings.monitoringEnabled
+                                      ? l10n.monitoringDisabledDescription
+                                      : _monitoringActive
+                                      ? l10n.monitoringActiveDescription
+                                      : l10n.monitoringWaitingDescription,
+                                ),
+                                value: _settings.monitoringEnabled,
+                                onChanged:
+                                    _saving ||
+                                        _applyingImmediateSetting ||
+                                        _changingMonitoringState ||
+                                        widget.onMonitoringEnabledChanged ==
+                                            null
+                                    ? null
+                                    : _setMonitoringEnabled,
+                              ),
+                            ),
+                            const Divider(height: 32),
+                            KeyedSubtree(
+                              key: _notificationsTourKey,
+                              child: SwitchListTile(
+                                key: const Key('alertsEnabledSwitch'),
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(l10n.sendNotifications),
+                                subtitle: Text(
+                                  l10n.notificationsDisabledDescription,
+                                ),
+                                value: _settings.alertsEnabled,
+                                onChanged:
+                                    _saving ||
+                                        _applyingImmediateSetting ||
+                                        _changingMonitoringState
+                                    ? null
+                                    : _setAlertsEnabled,
+                              ),
+                            ),
+                            if (_settings.alertsEnabled &&
+                                _notificationPermissionResolved &&
+                                !_notificationGranted)
                               Align(
                                 alignment: Alignment.centerLeft,
                                 child: OutlinedButton.icon(
-                                  key: const Key('allowScreenTimeAccessButton'),
-                                  onPressed: _checkingUsageAccess
+                                  key: const Key(
+                                    'allowNotificationAccessButton',
+                                  ),
+                                  onPressed:
+                                      _checkingNotificationPermission ||
+                                          _notificationPermissionAttempted
                                       ? null
-                                      : () => _openUsageAccessSettings(),
-                                  icon: _checkingUsageAccess
+                                      : _requestNotificationAccess,
+                                  icon: _checkingNotificationPermission
                                       ? const SizedBox.square(
                                           dimension: 18,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
                                           ),
                                         )
-                                      : const Icon(Icons.settings_outlined),
-                                  label: Text(l10n.allowScreenTimeAccess),
+                                      : const Icon(
+                                          Icons.notifications_outlined,
+                                        ),
+                                  label: Text(l10n.allowNotifications),
                                 ),
                               ),
+                            if (_alertsMutedUntil case final mutedUntil?) ...[
+                              Padding(
+                                key: const Key('temporaryAlertMuteStatus'),
+                                padding: const EdgeInsets.only(
+                                  left: 16,
+                                  bottom: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        l10n.alertsMutedUntil(
+                                          TimeOfDay.fromDateTime(
+                                            mutedUntil,
+                                          ).format(context),
+                                        ),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      key: const Key('unmuteAlertsButton'),
+                                      onPressed: _unmuteAlerts,
+                                      child: Text(l10n.unmuteNow),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (_screenTimeSupported)
+                              KeyedSubtree(
+                                key: _screenTimeTourKey,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    const Divider(height: 32),
+                                    Padding(
+                                      key: const Key('deviceScreenTimeSetting'),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Icon(
+                                            Icons.screen_lock_portrait_outlined,
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  l10n.useDeviceScreenTime,
+                                                  style: Theme.of(
+                                                    context,
+                                                  ).textTheme.titleMedium,
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  l10n.deviceScreenTimePrivacy,
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  _hasUsageAccess
+                                                      ? l10n.accessGranted
+                                                      : l10n.accessNotGranted,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (!_hasUsageAccess)
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: OutlinedButton.icon(
+                                          key: const Key(
+                                            'allowScreenTimeAccessButton',
+                                          ),
+                                          onPressed: _checkingUsageAccess
+                                              ? null
+                                              : () =>
+                                                    _openUsageAccessSettings(),
+                                          icon: _checkingUsageAccess
+                                              ? const SizedBox.square(
+                                                  dimension: 18,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                )
+                                              : const Icon(
+                                                  Icons.settings_outlined,
+                                                ),
+                                          label: Text(
+                                            l10n.allowScreenTimeAccess,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            const Divider(height: 32),
+                            Text(
+                              l10n.alertDelay,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            KeyedSubtree(
+                              key: _delayTourKey,
+                              child: DropdownButtonFormField<int>(
+                                key: const Key('alertDelayDropdown'),
+                                initialValue: _selectedDelayOption,
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(),
+                                  helperText: l10n.alertDelayHelp,
+                                ),
+                                items: [
+                                  _menuItem(10, l10n.secondsCount(10)),
+                                  _menuItem(30, l10n.secondsCount(30)),
+                                  _menuItem(60, l10n.minuteCount(1)),
+                                  _menuItem(customOption, l10n.custom),
+                                ],
+                                onChanged:
+                                    _saving ||
+                                        _applyingImmediateSetting ||
+                                        _changingMonitoringState
+                                    ? null
+                                    : (value) {
+                                        if (value == null) return;
+                                        setState(() {
+                                          _selectedDelayOption = value;
+                                          if (value != customOption) {
+                                            _customDelayController.text = value
+                                                .toString();
+                                          }
+                                        });
+                                      },
+                              ),
+                            ),
+                            if (_selectedDelayOption == customOption) ...[
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                key: const Key('customDelayField'),
+                                controller: _customDelayController,
+                                enabled:
+                                    !_saving &&
+                                    !_applyingImmediateSetting &&
+                                    !_changingMonitoringState,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                decoration: InputDecoration(
+                                  labelText: l10n.customDelaySeconds,
+                                  border: OutlineInputBorder(),
+                                ),
+                                validator: (value) => _validateCustom(
+                                  value,
+                                  selected:
+                                      _selectedDelayOption == customOption,
+                                  isDelay: true,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 28),
+                            Text(
+                              l10n.alertRepeatFrequency,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            KeyedSubtree(
+                              key: _frequencyTourKey,
+                              child: DropdownButtonFormField<int>(
+                                key: const Key('alertFrequencyDropdown'),
+                                initialValue: _selectedFrequencyOption,
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(),
+                                  helperText: l10n.alertFrequencyHelp,
+                                ),
+                                items: [
+                                  _menuItem(15, l10n.secondsCount(15)),
+                                  _menuItem(30, l10n.secondsCount(30)),
+                                  _menuItem(60, l10n.minuteCount(1)),
+                                  _menuItem(300, l10n.minuteCount(5)),
+                                  _menuItem(customOption, l10n.custom),
+                                ],
+                                onChanged:
+                                    _saving ||
+                                        _applyingImmediateSetting ||
+                                        _changingMonitoringState
+                                    ? null
+                                    : (value) {
+                                        if (value == null) return;
+                                        setState(() {
+                                          _selectedFrequencyOption = value;
+                                          if (value != customOption) {
+                                            _customFrequencyController.text =
+                                                value.toString();
+                                          }
+                                        });
+                                      },
+                              ),
+                            ),
+                            if (_selectedFrequencyOption == customOption) ...[
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                key: const Key('customFrequencyField'),
+                                controller: _customFrequencyController,
+                                enabled:
+                                    !_saving &&
+                                    !_applyingImmediateSetting &&
+                                    !_changingMonitoringState,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                decoration: InputDecoration(
+                                  labelText: l10n.customFrequencySeconds,
+                                  border: OutlineInputBorder(),
+                                ),
+                                validator: (value) => _validateCustom(
+                                  value,
+                                  selected:
+                                      _selectedFrequencyOption == customOption,
+                                  isDelay: false,
+                                ),
+                              ),
+                            ],
+                            const Divider(height: 36),
+                            Text(
+                              l10n.postureSetup,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(l10n.postureSetupDescription),
+                            const SizedBox(height: 8),
+                            _calibrationDetails(),
+                            const SizedBox(height: 12),
+                            KeyedSubtree(
+                              key: _postureSetupTourKey,
+                              child: FilledButton.icon(
+                                key: const Key('calibrateButton'),
+                                onPressed:
+                                    _saving ||
+                                        _calibrating ||
+                                        _applyingImmediateSetting ||
+                                        _changingMonitoringState
+                                    ? null
+                                    : _calibrate,
+                                icon: _calibrating
+                                    ? const SizedBox.square(
+                                        dimension: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.center_focus_strong),
+                                label: Text(
+                                  _hasCalibration
+                                      ? l10n.setPositionAgain
+                                      : l10n.setPosition,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                    const Divider(height: 32),
-                    Text(
-                      l10n.alertDelay,
-                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    const SizedBox(height: 8),
-                    KeyedSubtree(
-                      key: _delayTourKey,
-                      child: DropdownButtonFormField<int>(
-                        key: const Key('alertDelayDropdown'),
-                        initialValue: _selectedDelayOption,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(),
-                          helperText: l10n.alertDelayHelp,
-                        ),
-                        items: [
-                          _menuItem(10, l10n.secondsCount(10)),
-                          _menuItem(30, l10n.secondsCount(30)),
-                          _menuItem(60, l10n.minuteCount(1)),
-                          _menuItem(customOption, l10n.custom),
-                        ],
-                        onChanged:
-                            _saving ||
-                                _applyingImmediateSetting ||
-                                _changingMonitoringState
-                            ? null
-                            : (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  _selectedDelayOption = value;
-                                  if (value != customOption) {
-                                    _customDelayController.text = value
-                                        .toString();
-                                  }
-                                });
-                              },
-                      ),
-                    ),
-                    if (_selectedDelayOption == customOption) ...[
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        key: const Key('customDelayField'),
-                        controller: _customDelayController,
-                        enabled:
-                            !_saving &&
-                            !_applyingImmediateSetting &&
-                            !_changingMonitoringState,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        decoration: InputDecoration(
-                          labelText: l10n.customDelaySeconds,
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) => _validateCustom(
-                          value,
-                          selected: _selectedDelayOption == customOption,
-                          isDelay: true,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 28),
-                    Text(
-                      l10n.alertRepeatFrequency,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    KeyedSubtree(
-                      key: _frequencyTourKey,
-                      child: DropdownButtonFormField<int>(
-                        key: const Key('alertFrequencyDropdown'),
-                        initialValue: _selectedFrequencyOption,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(),
-                          helperText: l10n.alertFrequencyHelp,
-                        ),
-                        items: [
-                          _menuItem(15, l10n.secondsCount(15)),
-                          _menuItem(30, l10n.secondsCount(30)),
-                          _menuItem(60, l10n.minuteCount(1)),
-                          _menuItem(300, l10n.minuteCount(5)),
-                          _menuItem(customOption, l10n.custom),
-                        ],
-                        onChanged:
-                            _saving ||
-                                _applyingImmediateSetting ||
-                                _changingMonitoringState
-                            ? null
-                            : (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  _selectedFrequencyOption = value;
-                                  if (value != customOption) {
-                                    _customFrequencyController.text = value
-                                        .toString();
-                                  }
-                                });
-                              },
-                      ),
-                    ),
-                    if (_selectedFrequencyOption == customOption) ...[
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        key: const Key('customFrequencyField'),
-                        controller: _customFrequencyController,
-                        enabled:
-                            !_saving &&
-                            !_applyingImmediateSetting &&
-                            !_changingMonitoringState,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        decoration: InputDecoration(
-                          labelText: l10n.customFrequencySeconds,
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) => _validateCustom(
-                          value,
-                          selected: _selectedFrequencyOption == customOption,
-                          isDelay: false,
-                        ),
-                      ),
-                    ],
-                    const Divider(height: 36),
-                    Text(
-                      l10n.postureSetup,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(l10n.postureSetupDescription),
-                    const SizedBox(height: 8),
-                    _calibrationDetails(),
-                    const SizedBox(height: 12),
-                    KeyedSubtree(
-                      key: _postureSetupTourKey,
-                      child: FilledButton.icon(
-                        key: const Key('calibrateButton'),
-                        onPressed:
-                            _saving ||
-                                _calibrating ||
-                                _applyingImmediateSetting ||
-                                _changingMonitoringState
-                            ? null
-                            : _calibrate,
-                        icon: _calibrating
-                            ? const SizedBox.square(
-                                dimension: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.center_focus_strong),
-                        label: Text(
-                          _hasCalibration
-                              ? l10n.setPositionAgain
-                              : l10n.setPosition,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
     );
 

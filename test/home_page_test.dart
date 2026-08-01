@@ -5,7 +5,11 @@ import 'package:postureguard/pages/home_page.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
-Widget _home({required String status, Locale locale = const Locale('en')}) {
+Widget _home({
+  required String status,
+  Locale locale = const Locale('en'),
+  bool monitoringActive = true,
+}) {
   return MaterialApp(
     locale: locale,
     supportedLocales: AppLocalizations.supportedLocales,
@@ -14,6 +18,7 @@ Widget _home({required String status, Locale locale = const Locale('en')}) {
       key: ValueKey('${locale.languageCode}-$status'),
       testMode: true,
       initialPostureStatus: status,
+      initialMonitoringActive: monitoringActive,
     ),
   );
 }
@@ -69,13 +74,14 @@ void main() {
     await tester.pumpWidget(_home(status: 'GOOD'));
     await tester.pumpAndSettle();
 
-    final scrollable = tester.state<ScrollableState>(
+    expect(find.byKey(const Key('homeLayout')), findsOneWidget);
+    expect(
       find.descendant(
-        of: find.byKey(const Key('homeScrollView')),
+        of: find.byKey(const Key('homeLayout')),
         matching: find.byType(Scrollable),
       ),
+      findsNothing,
     );
-    expect(scrollable.position.maxScrollExtent, lessThanOrEqualTo(40));
     expect(find.byKey(const Key('homeCharacterArtwork')), findsOneWidget);
     expect(find.byKey(const Key('homeCoinBalance')), findsOneWidget);
     expect(find.byKey(const Key('homeHelpButton')), findsOneWidget);
@@ -85,6 +91,35 @@ void main() {
     expect(find.byKey(const Key('calibrationDiagnostics')), findsNothing);
     expect(find.textContaining('°'), findsNothing);
     expect(find.textContaining('threshold'), findsNothing);
+  });
+
+  testWidgets('monitoring-off state uses the same bounded compact layout', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_home(status: 'GOOD', monitoringActive: false));
+    await tester.pumpAndSettle();
+
+    final status = tester.widget<Text>(
+      find.byKey(const Key('homePostureStatus')),
+    );
+    expect(status.data, 'Monitoring is off');
+    expect(status.style?.fontSize, 40);
+    expect(find.text('STATUS'), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const Key('homeScore'))).bottom,
+      lessThanOrEqualTo(
+        tester.getRect(find.byKey(const Key('homeCharacterArtwork'))).top,
+      ),
+    );
+    expect(find.byKey(const Key('homeCharacterArtwork')), findsOneWidget);
+    expect(find.byKey(const Key('homeTimeMetrics')), findsOneWidget);
+    expect(find.byKey(const Key('homeBottomActions')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Thai Home tolerates text scaling without overflow', (

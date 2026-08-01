@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/locale_controller.dart';
+import '../widgets/responsive_layout.dart';
 import 'shop_page.dart';
 
 class Customizes extends StatelessWidget {
@@ -8,81 +9,86 @@ class Customizes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Scaffold(
+      appBar: AppBar(title: Text(l10n.customize)),
       body: SafeArea(
-        child: ListView(
-          key: const Key('customizeScrollView'),
-          physics: const ClampingScrollPhysics(),
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 45, left: 20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    height: 270,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Image.asset(
-                          'images/happy slime.png',
-                          width: 300,
-                          height: 300,
+        top: false,
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final padding = constraints.responsiveHorizontalPadding;
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: ResponsiveBreakpoints.maxContentWidth,
+                ),
+                child: ListView(
+                  key: const Key('customizeScrollView'),
+                  physics: const ClampingScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(padding, 16, padding, 24),
+                  children: [
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: constraints.isVerySmallPhone ? 250 : 340,
                         ),
-                        Align(
-                          alignment: Alignment.topLeft,
-                          child: SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: FloatingActionButton(
-                              onPressed: () {
-                                Navigator.pop(context);
-                              },
-                              child: const Icon(Icons.arrow_back),
+                        child: AspectRatio(
+                          key: const Key('customizeCharacterArtwork'),
+                          aspectRatio: 1,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                            child: Image.asset(
+                              'images/happy slime.png',
+                              fit: BoxFit.contain,
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(
-              color: Colors.grey,
-              thickness: 5,
-              indent: 0,
-              endIndent: 0,
-            ),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 30, left: 20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 300,
-                    height: 50,
-                    child: FloatingActionButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const Shop()),
-                        );
-                      },
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: Text(
-                        context.l10n.buyMore,
-                        style: const TextStyle(fontSize: 25),
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    const Divider(thickness: 2),
+                    const SizedBox(key: Key('customizeContentEnd'), height: 12),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: ResponsiveBreakpoints.maxContentWidth,
+            ),
+            child: Padding(
+              key: const Key('customizeBottomAction'),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: FilledButton(
+                  key: const Key('customizeBuyMoreButton'),
+                  onPressed: () {
+                    Navigator.push<void>(
+                      context,
+                      MaterialPageRoute(builder: (context) => const Shop()),
+                    );
+                  },
+                  child: Text(l10n.buyMore, textAlign: TextAlign.center),
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

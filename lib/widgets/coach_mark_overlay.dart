@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 class CoachMarkOverlay extends StatelessWidget {
@@ -38,75 +40,124 @@ class CoachMarkOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final targetIsNearTop =
-        (target?.center.dy ?? 0) < MediaQuery.sizeOf(context).height / 2;
-    final maxCardHeight = MediaQuery.sizeOf(context).height * 0.52;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const outerGap = 12.0;
+        const targetGap = 12.0;
+        final safePadding = MediaQuery.paddingOf(context);
+        final safeTop = safePadding.top + outerGap;
+        final safeBottom =
+            constraints.maxHeight - safePadding.bottom - outerGap;
+        final safeLeft = safePadding.left + outerGap;
+        final safeRight = safePadding.right + outerGap;
+        final safeHeight = math.max(1.0, safeBottom - safeTop);
+        final targetRect = target;
+        final maxPreferredHeight = safeHeight * 0.68;
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: CustomPaint(painter: _CoachMarkPainter(target)),
-          ),
-        ),
-        Positioned(
-          left: 16,
-          right: 16,
-          top: targetIsNearTop ? null : 16,
-          bottom: targetIsNearTop ? 16 : null,
-          child: SafeArea(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: maxCardHeight),
-              child: Card(
-                elevation: 8,
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      content ?? Text(body!),
-                      const SizedBox(height: 12),
-                      Text('${currentStep + 1} / $totalSteps'),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        alignment: WrapAlignment.end,
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          TextButton(
-                            key: skipButtonKey,
-                            onPressed: onSkip,
-                            child: Text(skipLabel),
+        late final double cardTop;
+        late final double maxCardHeight;
+        if (targetRect == null) {
+          maxCardHeight = maxPreferredHeight;
+          cardTop = safeBottom - maxCardHeight;
+        } else {
+          final availableAbove = math.max(
+            0.0,
+            targetRect.top - targetGap - safeTop,
+          );
+          final availableBelow = math.max(
+            0.0,
+            safeBottom - targetRect.bottom - targetGap,
+          );
+          final putBelow = availableBelow >= availableAbove;
+          final selectedSpace = putBelow ? availableBelow : availableAbove;
+          if (selectedSpace >= 132) {
+            maxCardHeight = math.min(maxPreferredHeight, selectedSpace);
+            cardTop = putBelow
+                ? targetRect.bottom + targetGap
+                : targetRect.top - targetGap - maxCardHeight;
+          } else {
+            maxCardHeight = maxPreferredHeight;
+            cardTop = safeTop + (safeHeight - maxCardHeight) / 2;
+          }
+        }
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(painter: _CoachMarkPainter(target)),
+              ),
+            ),
+            Positioned(
+              left: safeLeft,
+              right: safeRight,
+              top: cardTop,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxCardHeight),
+                child: Card(
+                  key: const Key('coachMarkCard'),
+                  elevation: 8,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Flexible(
+                          child: SingleChildScrollView(
+                            key: const Key('coachMarkScrollView'),
+                            physics: const ClampingScrollPhysics(),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 8),
+                                content ?? Text(body!),
+                                const SizedBox(height: 12),
+                                Text('${currentStep + 1} / $totalSteps'),
+                              ],
+                            ),
                           ),
-                          if (onBack != null)
-                            OutlinedButton(
-                              key: backButtonKey,
-                              onPressed: onBack,
-                              child: Text(backLabel),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          key: const Key('coachMarkActions'),
+                          alignment: WrapAlignment.end,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            TextButton(
+                              key: skipButtonKey,
+                              onPressed: onSkip,
+                              child: Text(skipLabel),
                             ),
-                          if (onNext != null)
-                            FilledButton(
-                              key: nextButtonKey,
-                              onPressed: onNext,
-                              child: Text(nextLabel),
-                            ),
-                        ],
-                      ),
-                    ],
+                            if (onBack != null)
+                              OutlinedButton(
+                                key: backButtonKey,
+                                onPressed: onBack,
+                                child: Text(backLabel),
+                              ),
+                            if (onNext != null)
+                              FilledButton(
+                                key: nextButtonKey,
+                                onPressed: onNext,
+                                child: Text(nextLabel),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
