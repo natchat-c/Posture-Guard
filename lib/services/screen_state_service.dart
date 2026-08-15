@@ -3,10 +3,32 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:screen_state_bridge/screen_state_bridge.dart';
 
+import '../platform/platform_capabilities.dart';
+
 abstract class ScreenStateProvider {
   Future<bool> isInteractive();
 
   Stream<bool> get changes;
+}
+
+ScreenStateProvider createScreenStateProvider({
+  PlatformCapabilities? capabilities,
+}) {
+  final resolvedCapabilities = capabilities ?? PlatformCapabilities.current;
+  if (resolvedCapabilities.supportsScreenStateEvents) {
+    return const AndroidScreenStateProvider();
+  }
+  return const AlwaysInteractiveScreenStateProvider();
+}
+
+class AlwaysInteractiveScreenStateProvider implements ScreenStateProvider {
+  const AlwaysInteractiveScreenStateProvider();
+
+  @override
+  Future<bool> isInteractive() async => true;
+
+  @override
+  Stream<bool> get changes => const Stream<bool>.empty();
 }
 
 class AndroidScreenStateProvider implements ScreenStateProvider {

@@ -83,6 +83,15 @@ void main() {
     expect(phoneAngleFromAccelerometer(x: 0, y: 0, z: 0), isNull);
   });
 
+  test('posture classification consumes a platform-neutral angle', () {
+    final normalizedAngle = phoneAngleFromAccelerometer(x: 0, y: 5, z: 5);
+    final thresholds = calculatePostureThresholds(90);
+    final hysteresis = PostureHysteresis();
+
+    expect(normalizedAngle, closeTo(45, 0.001));
+    expect(hysteresis.update(normalizedAngle!, thresholds), isTrue);
+  });
+
   test(
     'stable calibration accepts reasonable angles and rejects noisy or invalid samples',
     () {

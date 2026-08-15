@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sensors_plus/sensors_plus.dart';
@@ -16,6 +14,7 @@ import '../models/calibration.dart';
 import '../models/cosmetics.dart';
 import '../models/home_live_times.dart';
 import '../models/posture_thresholds.dart';
+import '../platform/platform_capabilities.dart';
 import '../services/cosmetic_repository.dart';
 import '../services/device_screen_time_service.dart';
 import '../services/coin_repository.dart';
@@ -134,7 +133,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     _cosmeticRepository = widget.cosmeticStore ?? CosmeticRepository();
     _settingsRepository = widget.settingsStore ?? SettingsRepository();
     _deviceScreenTimeProvider =
-        widget.screenTimeProvider ?? const AndroidDeviceScreenTimeProvider();
+        widget.screenTimeProvider ?? createDeviceScreenTimeProvider();
     _postureStatus = widget.initialPostureStatus;
     // First launch already explained the three posture states on the real
     // localized setup page. Replay starts at step 0 via the Help button.
@@ -150,7 +149,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       }
       return;
     }
-    FlutterForegroundTask.addTaskDataCallback(_onServiceData);
+    MonitoringService.addTaskDataCallback(_onServiceData);
     _subscribeToTodayStats();
     _initialize();
     _presentationTicker.start(_onPresentationTick);
@@ -734,7 +733,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         front,
         ResolutionPreset.low,
         enableAudio: false,
-        imageFormatGroup: Platform.isAndroid
+        imageFormatGroup: PlatformCapabilities.current.isAndroid
             ? ImageFormatGroup.nv21
             : ImageFormatGroup.bgra8888,
       );
@@ -1045,7 +1044,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    FlutterForegroundTask.removeTaskDataCallback(_onServiceData);
+    MonitoringService.removeTaskDataCallback(_onServiceData);
     _statsSubscription?.cancel();
     _serviceStateTimer?.cancel();
     _deviceScreenTimeRefreshTimer?.cancel();

@@ -5,7 +5,11 @@ import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart'
+    hide NotificationPermission;
+import 'package:flutter_foreground_task/flutter_foreground_task.dart'
+    as foreground
+    show NotificationPermission;
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,6 +18,7 @@ import '../functions/posture_check.dart';
 import '../models/app_settings.dart';
 import '../models/calibration.dart';
 import '../models/posture_thresholds.dart';
+import '../platform/platform_capabilities.dart';
 import 'notification_service.dart';
 import 'preferences_service.dart';
 import 'alert_mute_service.dart';
@@ -21,6 +26,19 @@ import 'screen_state_service.dart';
 import 'statistics_repository.dart';
 
 const String _pendingStatsKey = 'pendingMonitoringStats';
+
+enum NotificationPermission { granted, denied, permanentlyDenied }
+
+NotificationPermission _notificationPermissionFromPlugin(
+  foreground.NotificationPermission permission,
+) {
+  return switch (permission) {
+    foreground.NotificationPermission.granted => NotificationPermission.granted,
+    foreground.NotificationPermission.permanently_denied =>
+      NotificationPermission.permanentlyDenied,
+    foreground.NotificationPermission.denied => NotificationPermission.denied,
+  };
+}
 
 @pragma('vm:entry-point')
 void startPostureMonitoringCallback() {
@@ -41,8 +59,314 @@ class MonitoringActionResult {
   final NotificationPermission? notificationPermission;
 }
 
+typedef MonitoringTaskDataCallback = void Function(Object data);
+
+abstract class BackgroundMonitoringPlatformService {
+  const BackgroundMonitoringPlatformService();
+
+  bool get isSupported;
+
+  void initializeCommunicationPort();
+
+  void initialize();
+
+  void addTaskDataCallback(MonitoringTaskDataCallback callback);
+
+  void removeTaskDataCallback(MonitoringTaskDataCallback callback);
+
+  Future<bool> isRunning();
+
+  Future<NotificationPermission> notificationPermission();
+
+  Future<NotificationPermission> requestNotificationPermissionIfAppropriate();
+
+  Future<MonitoringActionResult> start();
+
+  Future<MonitoringActionResult> stop();
+
+  void updateSettings(AppSettings settings);
+
+  void updateCalibration(Calibration calibration);
+
+  void updateCameraSupplement({
+    required bool available,
+    bool suggestsGoodPosture = false,
+  });
+
+  void reportCameraUnavailable();
+
+  void requestState();
+
+  void requestStatisticsSync();
+
+  void alertMuteChanged();
+
+  void updateLanguage(String languageCode);
+}
+
+class BackgroundMonitoringPlatformServiceResolver {
+  const BackgroundMonitoringPlatformServiceResolver();
+
+  BackgroundMonitoringPlatformService resolve({
+    PlatformCapabilities? capabilities,
+  }) {
+    final resolvedCapabilities = capabilities ?? PlatformCapabilities.current;
+    if (resolvedCapabilities.supportsBackgroundMonitoring) {
+      return const AndroidBackgroundMonitoringPlatformService();
+    }
+    return const UnsupportedBackgroundMonitoringPlatformService();
+  }
+}
+
+class AndroidBackgroundMonitoringPlatformService
+    implements BackgroundMonitoringPlatformService {
+  const AndroidBackgroundMonitoringPlatformService();
+
+  @override
+  bool get isSupported => _AndroidMonitoringService.isSupported;
+
+  @override
+  void initializeCommunicationPort() {
+    FlutterForegroundTask.initCommunicationPort();
+  }
+
+  @override
+  void initialize() => _AndroidMonitoringService.initialize();
+
+  @override
+  void addTaskDataCallback(MonitoringTaskDataCallback callback) {
+    FlutterForegroundTask.addTaskDataCallback(callback);
+  }
+
+  @override
+  void removeTaskDataCallback(MonitoringTaskDataCallback callback) {
+    FlutterForegroundTask.removeTaskDataCallback(callback);
+  }
+
+  @override
+  Future<bool> isRunning() => _AndroidMonitoringService.isRunning();
+
+  @override
+  Future<NotificationPermission> notificationPermission() {
+    return _AndroidMonitoringService.notificationPermission();
+  }
+
+  @override
+  Future<NotificationPermission> requestNotificationPermissionIfAppropriate() {
+    return _AndroidMonitoringService.requestNotificationPermissionIfAppropriate();
+  }
+
+  @override
+  Future<MonitoringActionResult> start() => _AndroidMonitoringService.start();
+
+  @override
+  Future<MonitoringActionResult> stop() => _AndroidMonitoringService.stop();
+
+  @override
+  void updateSettings(AppSettings settings) {
+    _AndroidMonitoringService.updateSettings(settings);
+  }
+
+  @override
+  void updateCalibration(Calibration calibration) {
+    _AndroidMonitoringService.updateCalibration(calibration);
+  }
+
+  @override
+  void updateCameraSupplement({
+    required bool available,
+    bool suggestsGoodPosture = false,
+  }) {
+    _AndroidMonitoringService.updateCameraSupplement(
+      available: available,
+      suggestsGoodPosture: suggestsGoodPosture,
+    );
+  }
+
+  @override
+  void reportCameraUnavailable() {
+    _AndroidMonitoringService.reportCameraUnavailable();
+  }
+
+  @override
+  void requestState() => _AndroidMonitoringService.requestState();
+
+  @override
+  void requestStatisticsSync() {
+    _AndroidMonitoringService.requestStatisticsSync();
+  }
+
+  @override
+  void alertMuteChanged() => _AndroidMonitoringService.alertMuteChanged();
+
+  @override
+  void updateLanguage(String languageCode) {
+    _AndroidMonitoringService.updateLanguage(languageCode);
+  }
+}
+
+class UnsupportedBackgroundMonitoringPlatformService
+    implements BackgroundMonitoringPlatformService {
+  const UnsupportedBackgroundMonitoringPlatformService();
+
+  @override
+  bool get isSupported => false;
+
+  @override
+  void initializeCommunicationPort() {}
+
+  @override
+  void initialize() {}
+
+  @override
+  void addTaskDataCallback(MonitoringTaskDataCallback callback) {}
+
+  @override
+  void removeTaskDataCallback(MonitoringTaskDataCallback callback) {}
+
+  @override
+  Future<bool> isRunning() async => false;
+
+  @override
+  Future<NotificationPermission> notificationPermission() async {
+    return NotificationPermission.denied;
+  }
+
+  @override
+  Future<NotificationPermission>
+  requestNotificationPermissionIfAppropriate() async {
+    return NotificationPermission.denied;
+  }
+
+  @override
+  Future<MonitoringActionResult> start() async {
+    return const MonitoringActionResult(
+      success: false,
+      isRunning: false,
+      error: 'Background monitoring is currently available on Android.',
+    );
+  }
+
+  @override
+  Future<MonitoringActionResult> stop() async {
+    return const MonitoringActionResult(success: true, isRunning: false);
+  }
+
+  @override
+  void updateSettings(AppSettings settings) {}
+
+  @override
+  void updateCalibration(Calibration calibration) {}
+
+  @override
+  void updateCameraSupplement({
+    required bool available,
+    bool suggestsGoodPosture = false,
+  }) {}
+
+  @override
+  void reportCameraUnavailable() {}
+
+  @override
+  void requestState() {}
+
+  @override
+  void requestStatisticsSync() {}
+
+  @override
+  void alertMuteChanged() {}
+
+  @override
+  void updateLanguage(String languageCode) {}
+}
+
 class MonitoringService {
   MonitoringService._();
+
+  static BackgroundMonitoringPlatformService _platformService =
+      const BackgroundMonitoringPlatformServiceResolver().resolve();
+
+  static bool get isSupported => _platformService.isSupported;
+
+  static void initializeCommunicationPort() {
+    _platformService.initializeCommunicationPort();
+  }
+
+  static void initialize() => _platformService.initialize();
+
+  static void addTaskDataCallback(MonitoringTaskDataCallback callback) {
+    _platformService.addTaskDataCallback(callback);
+  }
+
+  static void removeTaskDataCallback(MonitoringTaskDataCallback callback) {
+    _platformService.removeTaskDataCallback(callback);
+  }
+
+  static Future<bool> isRunning() => _platformService.isRunning();
+
+  static Future<NotificationPermission> notificationPermission() {
+    return _platformService.notificationPermission();
+  }
+
+  static Future<NotificationPermission>
+  requestNotificationPermissionIfAppropriate() {
+    return _platformService.requestNotificationPermissionIfAppropriate();
+  }
+
+  static Future<MonitoringActionResult> start() => _platformService.start();
+
+  static Future<MonitoringActionResult> stop() => _platformService.stop();
+
+  static void updateSettings(AppSettings settings) {
+    _platformService.updateSettings(settings);
+  }
+
+  static void updateCalibration(Calibration calibration) {
+    _platformService.updateCalibration(calibration);
+  }
+
+  static void updateCameraSupplement({
+    required bool available,
+    bool suggestsGoodPosture = false,
+  }) {
+    _platformService.updateCameraSupplement(
+      available: available,
+      suggestsGoodPosture: suggestsGoodPosture,
+    );
+  }
+
+  static void reportCameraUnavailable() {
+    _platformService.reportCameraUnavailable();
+  }
+
+  static void requestState() => _platformService.requestState();
+
+  static void requestStatisticsSync() {
+    _platformService.requestStatisticsSync();
+  }
+
+  static void alertMuteChanged() => _platformService.alertMuteChanged();
+
+  static void updateLanguage(String languageCode) {
+    _platformService.updateLanguage(languageCode);
+  }
+
+  @visibleForTesting
+  static void usePlatformServiceForTesting(
+    BackgroundMonitoringPlatformService platformService,
+  ) {
+    _platformService = platformService;
+  }
+
+  @visibleForTesting
+  static void resetPlatformServiceForTesting() {
+    _platformService = const BackgroundMonitoringPlatformServiceResolver()
+        .resolve();
+  }
+}
+
+class _AndroidMonitoringService {
+  _AndroidMonitoringService._();
 
   static bool _initialized = false;
   static Future<MonitoringActionResult>? _startInFlight;
@@ -94,7 +418,9 @@ class MonitoringService {
 
   static Future<NotificationPermission> notificationPermission() async {
     if (!isSupported) return NotificationPermission.denied;
-    return FlutterForegroundTask.checkNotificationPermission();
+    final permission =
+        await FlutterForegroundTask.checkNotificationPermission();
+    return _notificationPermissionFromPlugin(permission);
   }
 
   static Future<NotificationPermission>
@@ -103,7 +429,7 @@ class MonitoringService {
 
     final current = await notificationPermission();
     if (current == NotificationPermission.granted ||
-        current == NotificationPermission.permanently_denied) {
+        current == NotificationPermission.permanentlyDenied) {
       return current;
     }
 
@@ -119,7 +445,9 @@ class MonitoringService {
       PreferenceKeys.notificationPermissionRequested,
       true,
     );
-    return FlutterForegroundTask.requestNotificationPermission();
+    final permission =
+        await FlutterForegroundTask.requestNotificationPermission();
+    return _notificationPermissionFromPlugin(permission);
   }
 
   static Future<MonitoringActionResult> start() {
@@ -342,7 +670,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
     ScreenStateProvider? screenStateProvider,
     AlertMuteController? alertMuteController,
   }) : _screenStateProvider =
-           screenStateProvider ?? const AndroidScreenStateProvider(),
+           screenStateProvider ?? createScreenStateProvider(),
        _alertMuteController = alertMuteController ?? AlertMuteController();
 
   final SharedPreferencesAsync _preferences = SharedPreferencesAsync();

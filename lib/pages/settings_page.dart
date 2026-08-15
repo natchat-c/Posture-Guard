@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter/services.dart';
 
 import '../l10n/locale_controller.dart';
@@ -118,7 +117,7 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _screenTimeProvider =
-        widget.screenTimeProvider ?? const AndroidDeviceScreenTimeProvider();
+        widget.screenTimeProvider ?? createDeviceScreenTimeProvider();
     _alertMuteController = widget.alertMuteController ?? AlertMuteController();
     _calibration = widget.initialCalibration;
     _hasCalibration = widget.initialHasCalibration || _calibration != null;

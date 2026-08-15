@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:postureguard/platform/platform_capabilities.dart';
 import 'package:postureguard/services/device_screen_time_service.dart';
 
 class _FakeScreenTimeProvider extends DeviceScreenTimeProvider {
@@ -40,6 +41,37 @@ class _FakeScreenTimeProvider extends DeviceScreenTimeProvider {
 }
 
 void main() {
+  const capabilityResolver = PlatformCapabilityResolver();
+
+  test('Android selects the current UsageStats provider', () {
+    final provider = createDeviceScreenTimeProvider(
+      capabilities: capabilityResolver.resolve(
+        platform: TargetPlatform.android,
+        isWeb: false,
+      ),
+    );
+
+    expect(provider, isA<AndroidDeviceScreenTimeProvider>());
+  });
+
+  test(
+    'non-Android selects an unavailable provider without a channel',
+    () async {
+      final provider = createDeviceScreenTimeProvider(
+        capabilities: capabilityResolver.resolve(
+          platform: TargetPlatform.iOS,
+          isWeb: false,
+        ),
+      );
+
+      expect(provider, isA<UnavailableDeviceScreenTimeProvider>());
+      expect(await provider.isSupported(), isFalse);
+      expect(await provider.hasUsageAccess(), isFalse);
+      expect(await provider.openUsageAccessSettings(), isFalse);
+      expect(await provider.getTodayScreenTimeSeconds(), isNull);
+    },
+  );
+
   test(
     'today query uses local midnight through the supplied current time',
     () async {

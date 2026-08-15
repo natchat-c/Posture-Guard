@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:postureguard/l10n/app_localizations.dart';
 import 'package:postureguard/models/app_settings.dart';
@@ -9,6 +8,7 @@ import 'package:postureguard/models/calibration.dart';
 import 'package:postureguard/pages/settings_page.dart';
 import 'package:postureguard/services/alert_mute_service.dart';
 import 'package:postureguard/services/device_screen_time_service.dart';
+import 'package:postureguard/services/monitoring_service.dart';
 import 'package:postureguard/services/preferences_service.dart';
 import 'package:postureguard/widgets/no_stretch_scroll_behavior.dart';
 

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../platform/platform_capabilities.dart';
+
 abstract class DeviceScreenTimeProvider {
   const DeviceScreenTimeProvider();
 
@@ -20,6 +22,35 @@ abstract class DeviceScreenTimeProvider {
     final start = DateTime(current.year, current.month, current.day);
     return getScreenTimeSeconds(start: start, end: current);
   }
+}
+
+DeviceScreenTimeProvider createDeviceScreenTimeProvider({
+  PlatformCapabilities? capabilities,
+}) {
+  final resolvedCapabilities = capabilities ?? PlatformCapabilities.current;
+  if (resolvedCapabilities.supportsDeviceScreenTime) {
+    return const AndroidDeviceScreenTimeProvider();
+  }
+  return const UnavailableDeviceScreenTimeProvider();
+}
+
+class UnavailableDeviceScreenTimeProvider extends DeviceScreenTimeProvider {
+  const UnavailableDeviceScreenTimeProvider();
+
+  @override
+  Future<bool> isSupported() async => false;
+
+  @override
+  Future<bool> hasUsageAccess() async => false;
+
+  @override
+  Future<bool> openUsageAccessSettings() async => false;
+
+  @override
+  Future<int?> getScreenTimeSeconds({
+    required DateTime start,
+    required DateTime end,
+  }) async => null;
 }
 
 class AndroidDeviceScreenTimeProvider extends DeviceScreenTimeProvider {

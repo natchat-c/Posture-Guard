@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../l10n/locale_controller.dart';
 import '../models/home_live_times.dart';
@@ -56,13 +55,13 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
         widget.repository ??
         (widget.recordsStream == null ? StatisticsRepository() : null);
     _screenTimeProvider =
-        widget.screenTimeProvider ?? const AndroidDeviceScreenTimeProvider();
+        widget.screenTimeProvider ?? createDeviceScreenTimeProvider();
     _clock = widget.clock ?? DateTime.now;
     _dateKey = postureDateKey(_clock());
     _livePresentation = StatisticsLivePresentation(dateKey: _dateKey);
     _presentationTicker = widget.presentationTicker ?? PresentationTicker();
     _presentationTicker.start(_onPresentationTick);
-    FlutterForegroundTask.addTaskDataCallback(_onServiceData);
+    MonitoringService.addTaskDataCallback(_onServiceData);
     unawaited(_refreshMonitoringState());
     unawaited(_refreshDeviceScreenTime());
     _authoritativeRefreshTimer = Timer.periodic(const Duration(minutes: 1), (
@@ -179,7 +178,7 @@ class _StatisticsState extends State<Statistics> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    FlutterForegroundTask.removeTaskDataCallback(_onServiceData);
+    MonitoringService.removeTaskDataCallback(_onServiceData);
     _presentationTicker.dispose();
     _authoritativeRefreshTimer?.cancel();
     super.dispose();

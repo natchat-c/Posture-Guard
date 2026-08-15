@@ -1,5 +1,3 @@
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-
 import '../models/app_settings.dart';
 import 'monitoring_service.dart';
 import 'preferences_service.dart';

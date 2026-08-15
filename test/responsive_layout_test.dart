@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:postureguard/l10n/app_localizations.dart';
 import 'package:postureguard/models/app_settings.dart';
@@ -12,6 +11,7 @@ import 'package:postureguard/pages/statistics_page.dart';
 import 'package:postureguard/pages/tutorial_page.dart';
 import 'package:postureguard/services/alert_mute_service.dart';
 import 'package:postureguard/services/device_screen_time_service.dart';
+import 'package:postureguard/services/monitoring_service.dart';
 import 'package:postureguard/services/preferences_service.dart';
 import 'package:postureguard/services/statistics_repository.dart';
 import 'package:postureguard/widgets/coach_mark_overlay.dart';
