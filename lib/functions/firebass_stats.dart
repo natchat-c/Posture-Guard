@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
+import '../services/user_database_paths.dart';
+
 String getTodayKey() {
   final now = DateTime.now();
 
@@ -13,9 +15,11 @@ String getTodayKey() {
   return '$year-$month-$day';
 }
 
-DatabaseReference getTodayStatsRef() {
-  return FirebaseDatabase.instance.ref(
-    'users/demo_user/daily_stats/${getTodayKey()}',
+Future<DatabaseReference> getTodayStatsRef({
+  UserDatabaseReferenceFactory? referenceFactory,
+}) {
+  return (referenceFactory ?? UserDatabaseReferenceFactory()).dailyStats(
+    getTodayKey(),
   );
 }
 
@@ -32,7 +36,8 @@ double calculateDailyScore({
 
 Future<Map<String, int>?> loadTodayStats() async {
   try {
-    final snapshot = await getTodayStatsRef().get();
+    final reference = await getTodayStatsRef();
+    final snapshot = await reference.get();
 
     if (!snapshot.exists || snapshot.value == null) {
       return null;
@@ -66,7 +71,8 @@ Future<void> saveTodayStats({
       totalBadPostureTime: totalBadPostureTime,
     );
 
-    await getTodayStatsRef().update({
+    final reference = await getTodayStatsRef();
+    await reference.update({
       'date': getTodayKey(),
       'updatedAt': ServerValue.timestamp,
       // Legacy totalScreenTimeSeconds remains monitored posture time.

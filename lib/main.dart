@@ -11,6 +11,7 @@ import 'pages/home_page.dart';
 import 'pages/language_selection_page.dart';
 import 'pages/tutorial_page.dart';
 import 'services/app_startup_coordinator.dart';
+import 'services/auth_service.dart';
 import 'services/monitoring_service.dart';
 import 'services/preferences_service.dart';
 import 'widgets/no_stretch_scroll_behavior.dart';
@@ -32,11 +33,32 @@ Future<void> configurePreferredOrientations() {
   ]);
 }
 
-Future<void> _initializeCloud() async {
+Future<void>? _cloudInitializationInFlight;
+
+Future<void> _initializeCloud({bool forceAuthRetry = false}) {
+  final existing = _cloudInitializationInFlight;
+  if (existing != null) return existing;
+
+  late final Future<void> operation;
+  operation = _initializeCloudOnce(forceAuthRetry: forceAuthRetry).whenComplete(
+    () {
+      if (identical(_cloudInitializationInFlight, operation)) {
+        _cloudInitializationInFlight = null;
+      }
+    },
+  );
+  _cloudInitializationInFlight = operation;
+  return operation;
+}
+
+Future<void> _initializeCloudOnce({required bool forceAuthRetry}) async {
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+    await AuthService.instance.ensureSignedIn(forceRetry: forceAuthRetry);
   } catch (error) {
     debugPrint('Firebase initialization skipped or failed: $error');
   }
@@ -60,12 +82,13 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final LocaleController _localeController;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _localeController = LocaleController(
       preferences: widget.languagePreferences,
       initialCode: widget.initialLanguageCode,
@@ -74,8 +97,16 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _localeController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_initializeCloud(forceAuthRetry: true));
+    }
   }
 
   @override

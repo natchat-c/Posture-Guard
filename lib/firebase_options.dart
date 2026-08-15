@@ -54,14 +54,13 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBvVVLg-RYaqCFPuupeUWyxYPDLiPnAWko',
-    appId: '1:616136459870:android:be980807d9dbad3de216cf',
+    appId: '1:616136459870:android:527c7bf72bcab547e216cf',
     messagingSenderId: '616136459870',
     projectId: 'posture-guard-ab657',
     databaseURL:
         'https://posture-guard-ab657-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'posture-guard-ab657.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyBT4R5DHeXdii0OKI_FLhiB8r2OeIFqiV0',
     appId: '1:616136459870:ios:41b05d69081fa01ae216cf',
@@ -72,7 +71,6 @@ class DefaultFirebaseOptions {
     storageBucket: 'posture-guard-ab657.firebasestorage.app',
     iosBundleId: 'com.example.postureguard',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyBT4R5DHeXdii0OKI_FLhiB8r2OeIFqiV0',
     appId: '1:616136459870:ios:41b05d69081fa01ae216cf',

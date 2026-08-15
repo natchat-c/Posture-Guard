@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'statistics_repository.dart';
+import 'user_database_paths.dart';
 
 class CoinState {
   const CoinState({
@@ -84,27 +84,31 @@ abstract class CoinStore {
 }
 
 class FirebaseCoinRemoteStore implements CoinRemoteStore {
-  FirebaseCoinRemoteStore({DatabaseReference? reference})
-    : _reference = reference;
+  FirebaseCoinRemoteStore({
+    DatabaseReference? reference,
+    UserDatabaseReferenceFactory? referenceFactory,
+  }) : _reference = reference,
+       _referenceFactory = referenceFactory ?? UserDatabaseReferenceFactory();
 
   final DatabaseReference? _reference;
+  final UserDatabaseReferenceFactory _referenceFactory;
 
-  DatabaseReference get _resolvedReference {
-    if (_reference case final reference?) return reference;
-    if (Firebase.apps.isEmpty) throw StateError('Firebase is not initialized.');
-    return FirebaseDatabase.instance.ref('users/demo_user/coins');
+  Future<DatabaseReference> get _resolvedReference async {
+    return _reference ?? await _referenceFactory.coins();
   }
 
   @override
   Future<CoinState> load() async {
-    final snapshot = await _resolvedReference.get();
+    final reference = await _resolvedReference;
+    final snapshot = await reference.get();
     return CoinState.fromValue(snapshot.value);
   }
 
   @override
   Future<CoinState> merge(CoinState local) async {
     late CoinState merged;
-    final result = await _resolvedReference.runTransaction((value) {
+    final reference = await _resolvedReference;
+    final result = await reference.runTransaction((value) {
       merged = CoinState.fromValue(value).merge(local);
       final data = value is Map
           ? Map<String, Object?>.fromEntries(

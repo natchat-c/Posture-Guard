@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_settings.dart';
 import '../models/calibration.dart';
+import 'user_database_paths.dart';
 
 class PreferenceKeys {
   const PreferenceKeys._();
@@ -67,15 +68,17 @@ class SettingsRepository implements SettingsStore {
   SettingsRepository({
     SharedPreferencesAsync? preferences,
     DatabaseReference? reference,
+    UserDatabaseReferenceFactory? referenceFactory,
   }) : _preferences = preferences ?? SharedPreferencesAsync(),
-       _reference = reference;
+       _reference = reference,
+       _referenceFactory = referenceFactory ?? UserDatabaseReferenceFactory();
 
   final SharedPreferencesAsync _preferences;
   final DatabaseReference? _reference;
+  final UserDatabaseReferenceFactory _referenceFactory;
 
-  DatabaseReference get _settingsReference {
-    return _reference ??
-        FirebaseDatabase.instance.ref('users/demo_user/settings');
+  Future<DatabaseReference> get _settingsReference async {
+    return _reference ?? await _referenceFactory.settings();
   }
 
   @override
@@ -117,8 +120,9 @@ class SettingsRepository implements SettingsStore {
       final localRevision =
           await _preferences.getInt(PreferenceKeys.settingsUpdatedAtEpochMs) ??
           0;
+      final settingsReference = await _settingsReference;
       if (pending) {
-        final result = await _settingsReference.runTransaction((value) {
+        final result = await settingsReference.runTransaction((value) {
           final data = value is Map
               ? Map<String, Object?>.fromEntries(
                   value.entries.map(
@@ -143,7 +147,7 @@ class SettingsRepository implements SettingsStore {
         return;
       }
 
-      final snapshot = await _settingsReference.get();
+      final snapshot = await settingsReference.get();
       if (!snapshot.exists || snapshot.value is! Map) return;
       final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
       final remoteRevision = (data['settingsUpdatedAtEpochMs'] as num?)
@@ -237,22 +241,24 @@ class CalibrationRepository {
   CalibrationRepository({
     SharedPreferencesAsync? preferences,
     DatabaseReference? reference,
+    UserDatabaseReferenceFactory? referenceFactory,
     Future<Object?> Function()? remoteLoader,
     Future<void> Function(Map<String, Object?> update)? remoteUpdater,
   }) : _preferences = preferences ?? SharedPreferencesAsync(),
        _reference = reference,
+       _referenceFactory = referenceFactory ?? UserDatabaseReferenceFactory(),
        _remoteLoader = remoteLoader,
        _remoteUpdater = remoteUpdater;
 
   final SharedPreferencesAsync _preferences;
   final DatabaseReference? _reference;
+  final UserDatabaseReferenceFactory _referenceFactory;
   final Future<Object?> Function()? _remoteLoader;
   final Future<void> Function(Map<String, Object?> update)? _remoteUpdater;
   static int _localWriteGeneration = 0;
 
-  DatabaseReference get _settingsReference {
-    return _reference ??
-        FirebaseDatabase.instance.ref('users/demo_user/settings');
+  Future<DatabaseReference> get _settingsReference async {
+    return _reference ?? await _referenceFactory.settings();
   }
 
   Future<CalibrationLoadResult> load() async {
@@ -424,7 +430,8 @@ class CalibrationRepository {
         return;
       }
 
-      final remoteValue = (await _settingsReference.get()).value;
+      final settingsReference = await _settingsReference;
+      final remoteValue = (await settingsReference.get()).value;
       if (remoteValue is! Map ||
           !remoteValue.containsKey('neutralPhoneAngle')) {
         return;
@@ -492,7 +499,8 @@ class CalibrationRepository {
     if (_remoteUpdater case final updater?) {
       await updater(update);
     } else {
-      await _settingsReference.update(update);
+      final settingsReference = await _settingsReference;
+      await settingsReference.update(update);
     }
   }
 

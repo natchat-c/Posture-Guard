@@ -19,11 +19,13 @@ import '../models/app_settings.dart';
 import '../models/calibration.dart';
 import '../models/posture_thresholds.dart';
 import '../platform/platform_capabilities.dart';
+import 'auth_service.dart';
 import 'notification_service.dart';
 import 'preferences_service.dart';
 import 'alert_mute_service.dart';
 import 'screen_state_service.dart';
 import 'statistics_repository.dart';
+import 'user_database_paths.dart';
 
 const String _pendingStatsKey = 'pendingMonitoringStats';
 
@@ -494,6 +496,10 @@ class _AndroidMonitoringService {
       serviceTypes: const [ForegroundServiceTypes.specialUse],
       notificationTitle: notificationText.title,
       notificationText: notificationText.body,
+      notificationIcon: const NotificationIcon(
+        metaDataName: PostureNotificationService
+            .foregroundServiceNotificationIconMetadataName,
+      ),
       callback: startPostureMonitoringCallback,
     );
 
@@ -669,13 +675,18 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   PostureMonitoringTaskHandler({
     ScreenStateProvider? screenStateProvider,
     AlertMuteController? alertMuteController,
+    AuthService? authService,
+    StatisticsRepository? statisticsRepository,
   }) : _screenStateProvider =
            screenStateProvider ?? createScreenStateProvider(),
-       _alertMuteController = alertMuteController ?? AlertMuteController();
+       _alertMuteController = alertMuteController ?? AlertMuteController(),
+       _authService = authService ?? AuthService.instance,
+       _statisticsRepository = statisticsRepository;
 
   final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
   final ScreenStateProvider _screenStateProvider;
   final AlertMuteController _alertMuteController;
+  final AuthService _authService;
   final PhoneAngleFilter _phoneAngleFilter = PhoneAngleFilter();
   final PostureHysteresis _hysteresis = PostureHysteresis();
   final PhoneMovementDetector _movementDetector = PhoneMovementDetector();
@@ -720,7 +731,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       _preferences,
     );
     await _loadPendingStats();
-    _statisticsRepository = StatisticsRepository();
+    _statisticsRepository ??= _createStatisticsRepository();
 
     try {
       await PostureNotificationService.initialize();
@@ -774,6 +785,8 @@ class PostureMonitoringTaskHandler extends TaskHandler {
           options: DefaultFirebaseOptions.currentPlatform,
         );
       }
+      final user = await _authService.ensureSignedIn(forceRetry: true);
+      if (user == null) return;
       await _statisticsRepository?.synchronize();
     } catch (error) {
       debugPrint('Cloud statistics sync is unavailable: $error');
@@ -848,6 +861,10 @@ class PostureMonitoringTaskHandler extends TaskHandler {
     await FlutterForegroundTask.updateService(
       notificationTitle: notificationText.title,
       notificationText: notificationText.body,
+      notificationIcon: const NotificationIcon(
+        metaDataName: PostureNotificationService
+            .foregroundServiceNotificationIconMetadataName,
+      ),
     );
   }
 
@@ -1029,7 +1046,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   }
 
   Future<void> _flushPendingStats() async {
-    final repository = _statisticsRepository ??= StatisticsRepository();
+    final repository = _statisticsRepository ??= _createStatisticsRepository();
 
     for (final entry in _pendingStats.entries.toList()) {
       if (entry.value.isEmpty) {
@@ -1048,6 +1065,16 @@ class PostureMonitoringTaskHandler extends TaskHandler {
         break;
       }
     }
+  }
+
+  StatisticsRepository _createStatisticsRepository() {
+    return StatisticsRepository(
+      remoteStore: FirebaseStatisticsRemoteStore(
+        referenceFactory: UserDatabaseReferenceFactory(
+          authService: _authService,
+        ),
+      ),
+    );
   }
 
   Future<void> _loadPendingStats() async {

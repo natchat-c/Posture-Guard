@@ -1,4 +1,4 @@
-package com.example.postureguard
+package com.postureguard.app
 
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents

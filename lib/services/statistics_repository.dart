@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'user_database_paths.dart';
 
 String postureDateKey([DateTime? date]) {
   final value = date ?? DateTime.now();
@@ -240,28 +241,22 @@ abstract class StatisticsRemoteStore {
 }
 
 class FirebaseStatisticsRemoteStore implements StatisticsRemoteStore {
-  FirebaseStatisticsRemoteStore({FirebaseDatabase? database})
-    : _database = database;
+  FirebaseStatisticsRemoteStore({
+    FirebaseDatabase? database,
+    UserDatabaseReferenceFactory? referenceFactory,
+  }) : _referenceFactory =
+           referenceFactory ?? UserDatabaseReferenceFactory(database: database);
 
-  final FirebaseDatabase? _database;
+  final UserDatabaseReferenceFactory _referenceFactory;
 
-  FirebaseDatabase get _resolvedDatabase {
-    if (_database case final database?) return database;
-    if (Firebase.apps.isEmpty) {
-      throw StateError('Firebase is not initialized.');
-    }
-    return FirebaseDatabase.instance;
-  }
-
-  DatabaseReference _referenceFor(String dateKey) {
-    return _resolvedDatabase.ref('users/demo_user/daily_stats/$dateKey');
+  Future<DatabaseReference> _referenceFor(String dateKey) {
+    return _referenceFactory.dailyStats(dateKey);
   }
 
   @override
   Future<Map<String, DailyStats>> loadAll() async {
-    final snapshot = await _resolvedDatabase
-        .ref('users/demo_user/daily_stats')
-        .get();
+    final reference = await _referenceFactory.dailyStatsRoot();
+    final snapshot = await reference.get();
     return statisticsRecordsFromValue(snapshot.value);
   }
 
@@ -272,7 +267,8 @@ class FirebaseStatisticsRemoteStore implements StatisticsRemoteStore {
     required int sequence,
     required StatsDelta delta,
   }) async {
-    final result = await _referenceFor(dateKey).runTransaction((currentValue) {
+    final reference = await _referenceFor(dateKey);
+    final result = await reference.runTransaction((currentValue) {
       final data = currentValue is Map
           ? Map<String, Object?>.fromEntries(
               currentValue.entries.map(
@@ -309,7 +305,8 @@ class FirebaseStatisticsRemoteStore implements StatisticsRemoteStore {
   @override
   Future<void> saveDeviceScreenTime(String dateKey, int seconds) async {
     final safeSeconds = max(0, seconds);
-    final result = await _referenceFor(dateKey).runTransaction((currentValue) {
+    final reference = await _referenceFor(dateKey);
+    final result = await reference.runTransaction((currentValue) {
       final data = currentValue is Map
           ? Map<String, Object?>.fromEntries(
               currentValue.entries.map(

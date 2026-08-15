@@ -1,25 +1,28 @@
 {
-    "flutter": {
-        "platforms": {
-            "android": {
-                "default": {
-                    "projectId": "posture-guard-ab657",
-                    "appId": "1:616136459870:android:be980807d9dbad3de216cf",
-                    "fileOutput": "android/app/google-services.json"
-                }
-            },
-            "dart": {
-                "lib/firebase_options.dart": {
-                    "projectId": "posture-guard-ab657",
-                    "configurations": {
-                        "android": "1:616136459870:android:be980807d9dbad3de216cf",
-                        "ios": "1:616136459870:ios:41b05d69081fa01ae216cf",
-                        "macos": "1:616136459870:ios:41b05d69081fa01ae216cf",
-                        "web": "1:616136459870:web:838af8926bed42f6e216cf",
-                        "windows": "1:616136459870:web:ab336a1ba966d615e216cf"
-                    }
-                }
-            }
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "posture-guard-ab657",
+          "appId": "1:616136459870:android:527c7bf72bcab547e216cf",
+          "fileOutput": "android/app/google-services.json"
         }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "posture-guard-ab657",
+          "configurations": {
+            "android": "1:616136459870:android:527c7bf72bcab547e216cf",
+            "ios": "1:616136459870:ios:41b05d69081fa01ae216cf",
+            "macos": "1:616136459870:ios:41b05d69081fa01ae216cf",
+            "web": "1:616136459870:web:838af8926bed42f6e216cf",
+            "windows": "1:616136459870:web:ab336a1ba966d615e216cf"
+          }
+        }
+      }
     }
+  }
 }

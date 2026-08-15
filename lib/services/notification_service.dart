@@ -55,6 +55,8 @@ class PostureNotificationService {
 
   static const int foregroundServiceNotificationId = 41001;
   static const int postureAlertNotificationId = 41002;
+  static const String foregroundServiceNotificationIconMetadataName =
+      'com.postureguard.app.service.NOTIFICATION_ICON';
   static const String postureAlertChannelId = 'posture_alerts_v2';
   static const String postureAlertChannelName = 'Posture Alerts';
   static const String mute15MinutesActionId = 'mute_15_minutes';
@@ -120,7 +122,7 @@ class PostureNotificationService {
     if (_initialized) return;
 
     const settings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('@drawable/ic_stat_posture_guard'),
       iOS: DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,

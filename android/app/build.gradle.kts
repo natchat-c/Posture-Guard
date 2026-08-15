@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.postureguard"
+    namespace = "com.postureguard.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -26,7 +26,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.postureguard"
+        applicationId = "com.postureguard.app"
 
         // SharedPreferencesAsync uses Android DataStore (API 24+).
         minSdk = 24

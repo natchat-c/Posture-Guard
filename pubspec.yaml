@@ -49,6 +49,7 @@ dependencies:
   shared_preferences: ^2.5.5
   screen_state_bridge:
     path: packages/screen_state_bridge
+  firebase_auth: 6.5.7
 
 dev_dependencies:
   flutter_test:
