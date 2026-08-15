@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'preferences_service.dart';
 import 'user_database_paths.dart';
 
 String postureDateKey([DateTime? date]) {
@@ -408,9 +409,10 @@ class StatisticsRepository {
        _remoteStore = remoteStore,
        _watchInterval = watchInterval;
 
-  static const String _localStateKey = 'localStatisticsStateV2';
-  static const String _cloudCacheKey = 'cloudStatisticsCacheV2';
-  static const String _deviceScreenTimeKey = 'localDeviceScreenTimeV2';
+  static const String _localStateKey = PreferenceKeys.localStatisticsState;
+  static const String _cloudCacheKey = PreferenceKeys.cloudStatisticsCache;
+  static const String _deviceScreenTimeKey =
+      PreferenceKeys.localDeviceScreenTime;
 
   final SharedPreferencesAsync _preferences;
   final StatisticsRemoteStore? _remoteStore;

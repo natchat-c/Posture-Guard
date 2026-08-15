@@ -6,6 +6,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'statistics_repository.dart';
+import 'preferences_service.dart';
 import 'user_database_paths.dart';
 
 class CoinState {
@@ -134,8 +135,8 @@ class CoinRepository implements CoinStore {
   }) : _preferences = preferences ?? SharedPreferencesAsync(),
        _remoteStore = remoteStore;
 
-  static const String _stateKey = 'localCoinStateV2';
-  static const String _pendingKey = 'localCoinStatePendingSyncV2';
+  static const String _stateKey = PreferenceKeys.localCoinState;
+  static const String _pendingKey = PreferenceKeys.localCoinStatePendingSync;
 
   final SharedPreferencesAsync _preferences;
   final CoinRemoteStore? _remoteStore;

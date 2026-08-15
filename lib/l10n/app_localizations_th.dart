@@ -727,4 +727,181 @@ class AppLocalizationsTh extends AppLocalizations {
   @override
   String get monitoringProblem =>
       'Posture Guard ต้องการให้คุณตรวจสอบ เปิดการตั้งค่าแล้วลองอีกครั้ง';
+
+  @override
+  String get privacyNoticeTitle => 'ความเป็นส่วนตัวของกล้อง';
+
+  @override
+  String get privacyNoticeBody =>
+      'Posture Guard สามารถใช้กล้องหน้าเพื่อช่วยตรวจท่าทางขณะที่คุณใช้โทรศัพท์';
+
+  @override
+  String get privacyNoticeDetail =>
+      'ภาพจากกล้องประมวลผลบนอุปกรณ์ของคุณเท่านั้น โดยไม่บันทึกหรืออัปโหลด คุณปิดการช่วยตรวจด้วยกล้องได้ทุกเมื่อและใช้การตรวจด้วยเซ็นเซอร์วัดมุมโทรศัพท์ต่อไปได้';
+
+  @override
+  String get useSensorsOnly => 'ใช้เซ็นเซอร์เท่านั้น';
+
+  @override
+  String get cameraAssistTitle => 'ใช้กล้องช่วยตรวจท่าทาง';
+
+  @override
+  String get cameraAssistSettingDescription =>
+      'ใช้กล้องหน้าเป็นตัวช่วยเฉพาะเมื่อแอปนี้แสดงอยู่ คุณยังใช้การตรวจด้วยเซ็นเซอร์ได้โดยไม่ต้องเปิดกล้อง';
+
+  @override
+  String get cameraExplanationTitle => 'การช่วยตรวจท่าด้วยกล้อง';
+
+  @override
+  String get cameraExplanationBody =>
+      'Posture Guard สามารถใช้กล้องหน้าเพื่อช่วยเพิ่มความแม่นยำในการตรวจจับท่าทางขณะที่แอปกำลังเปิดอยู่\n\nภาพจากกล้องจะประมวลผลภายในอุปกรณ์ ไม่มีการบันทึกภาพ และไม่มีการอัปโหลดภาพ\n\nการอนุญาตใช้กล้องเป็นทางเลือก หากไม่อนุญาต แอปจะยังคงตรวจท่าด้วยเซ็นเซอร์การเคลื่อนไหวของโทรศัพท์';
+
+  @override
+  String get notNow => 'ยังไม่ใช่ตอนนี้';
+
+  @override
+  String get cameraActiveIndicator => 'กล้องหน้ากำลังทำงาน • ไม่มีการบันทึกภาพ';
+
+  @override
+  String get cameraAndPrivacy => 'ความเป็นส่วนตัวและ PDPA';
+
+  @override
+  String get privacyInformationBody =>
+      'กล้องหน้าจะใช้เป็นข้อมูลเสริมสำหรับตรวจท่าทางเท่านั้น ขณะที่แอปนี้แสดงอยู่และระบบต้องการข้อมูลเพิ่ม ภาพประมวลผลบนอุปกรณ์นี้ ถูกทิ้งหลังวิเคราะห์ และไม่ถูกบันทึกหรืออัปโหลด คุณเลือกใช้เฉพาะเซ็นเซอร์ได้เสมอ';
+
+  @override
+  String get privacyPageIntroduction =>
+      'Posture Guard ออกแบบมาเพื่อตรวจสอบท่าทางของผู้ใช้ พร้อมให้ผู้ใช้ควบคุมการใช้ข้อมูลจากอุปกรณ์และกล้องของตนเอง\n\nแอปจะใช้เซ็นเซอร์การเคลื่อนไหวของโทรศัพท์เป็นหลักในการประเมินท่าทาง และผู้ใช้สามารถเลือกเปิดกล้องหน้าเพิ่มเติมเพื่อช่วยในการตรวจจับท่าทางขณะที่แอปกำลังเปิดอยู่';
+
+  @override
+  String get privacyPageCameraUseTitle => 'การใช้กล้อง';
+
+  @override
+  String get privacyPageCameraUseIntroduction =>
+      'การใช้กล้องหน้าเป็นทางเลือก\n\nเมื่อเปิดใช้งานการช่วยตรวจท่าด้วยกล้อง:';
+
+  @override
+  String get privacyPageCameraUseItems =>
+      'กล้องหน้าจะใช้เพื่อช่วยประเมินท่าทางของผู้ใช้เท่านั้น\nภาพจากกล้องจะประมวลผลโดยตรงภายในอุปกรณ์\nไม่มีการบันทึกภาพจากกล้อง\nไม่มีการอัปโหลดภาพไปยัง Firebase หรือเซิร์ฟเวอร์ภายนอก\nภาพจะถูกทิ้งหลังจากประมวลผลเสร็จ\nกล้องจะทำงานเฉพาะขณะที่แอปกำลังเปิดและระบบจำเป็นต้องใช้กล้องเพื่อช่วยตรวจท่า';
+
+  @override
+  String get privacyPageCameraUseClosing =>
+      'ผู้ใช้สามารถปิดการช่วยตรวจท่าด้วยกล้องได้ทุกเมื่อ และ Posture Guard จะยังคงตรวจสอบท่าทางด้วยเซ็นเซอร์การเคลื่อนไหวของโทรศัพท์';
+
+  @override
+  String get privacyPageCameraPermissionTitle => 'การอนุญาตใช้กล้อง';
+
+  @override
+  String get privacyPageCameraPermissionBody =>
+      'Posture Guard จะอธิบายเหตุผลในการใช้กล้องก่อนที่ Android จะแสดงหน้าต่างขออนุญาตใช้กล้อง\n\nการอนุญาตใช้กล้องเป็นทางเลือก\n\nหากผู้ใช้ไม่อนุญาต แอปจะยังคงตรวจสอบท่าทางด้วยเซ็นเซอร์การเคลื่อนไหว\n\nผู้ใช้สามารถถอนสิทธิ์การใช้กล้องภายหลังได้จากการตั้งค่าของอุปกรณ์';
+
+  @override
+  String get privacyPageDataStoredTitle => 'ข้อมูลที่จัดเก็บ';
+
+  @override
+  String get privacyPageDataStoredIntroduction =>
+      'Posture Guard อาจจัดเก็บข้อมูลที่จำเป็นต่อการทำงานของแอป เช่น:';
+
+  @override
+  String get privacyPageDataStoredItems =>
+      'การตั้งค่าแอป\nค่าการปรับเทียบท่าทาง\nสถิติท่าทาง\nประวัติการตรวจสอบท่าทาง\nเหรียญ\nเครื่องแต่งกายที่เป็นเจ้าของและกำลังใช้งาน\nความคืบหน้าภายในแอป\nการตั้งค่าการช่วยตรวจท่าด้วยกล้อง';
+
+  @override
+  String get privacyPageDataStoredClosing =>
+      'ข้อมูลบนคลาวด์จะถูกจัดเก็บภายใต้บัญชี Firebase แบบไม่ระบุตัวตนของผู้ใช้แต่ละคน เพื่อแยกข้อมูลของผู้ใช้แต่ละคนออกจากกัน\n\nPosture Guard ไม่ต้องการชื่อ อีเมล หรือรหัสผ่านของผู้ใช้ในการสร้างบัญชีแบบไม่ระบุตัวตนนี้';
+
+  @override
+  String get privacyPageFirebaseTitle => 'Firebase และข้อมูลบนคลาวด์';
+
+  @override
+  String get privacyPageFirebaseBody =>
+      'Posture Guard ใช้ Firebase เพื่อจัดเก็บและซิงค์ข้อมูลบางส่วนที่จำเป็นต่อการทำงานของแอป\n\nแต่ละการติดตั้งแอปจะได้รับ Firebase User ID แบบไม่ระบุตัวตน\n\nFirebase User ID นี้ใช้เพื่อแยกข้อมูลของผู้ใช้แต่ละคนออกจากกัน\n\nPosture Guard ไม่ได้ใช้บัญชีแบบไม่ระบุตัวตนนี้เพื่อระบุตัวตนของผู้ใช้ด้วยชื่อ';
+
+  @override
+  String get privacyPageChoicesTitle => 'สิทธิและตัวเลือกของผู้ใช้';
+
+  @override
+  String get privacyPageChoicesItems =>
+      'ใช้ Posture Guard โดยไม่เปิดกล้อง\nเปิดหรือปิดการช่วยตรวจท่าด้วยกล้อง\nปฏิเสธหรือถอนสิทธิ์การใช้กล้อง\nใช้งานระบบตรวจท่าด้วยเซ็นเซอร์ต่อไปได้ หากไม่สามารถใช้กล้องได้\nอ่านข้อมูลด้านความเป็นส่วนตัวนี้ได้ตลอดเวลา\nลบข้อมูล Posture Guard ของตนเองได้จากหน้าการตั้งค่า';
+
+  @override
+  String get privacyPageDeleteTitle => 'การลบข้อมูล';
+
+  @override
+  String get privacyPageDeleteBody =>
+      'ผู้ใช้สามารถเลือก \"ลบข้อมูลของฉัน\" ในหน้าการตั้งค่า เพื่อลบข้อมูล Posture Guard บนคลาวด์และบัญชี Firebase แบบไม่ระบุตัวตน\n\nแอปจะขอให้ผู้ใช้ยืนยันก่อนดำเนินการลบ\n\nหากไม่สามารถลบข้อมูลได้สำเร็จ Posture Guard จะไม่แสดงข้อความว่าลบข้อมูลสำเร็จโดยไม่เป็นความจริง';
+
+  @override
+  String get privacyPageCameraIndicatorTitle => 'ตัวบ่งชี้การใช้กล้อง';
+
+  @override
+  String get privacyPageCameraIndicatorBody =>
+      'เมื่อกล้องหน้ากำลังทำงานเพื่อช่วยตรวจท่าจริง Posture Guard จะแสดงตัวบ่งชี้การใช้กล้องภายในแอป\n\nผู้ใช้จึงสามารถทราบได้ว่ากล้องกำลังถูกใช้งานอยู่เมื่อใด';
+
+  @override
+  String get privacyPageConsentTitle => 'ความยินยอมและการควบคุม';
+
+  @override
+  String get privacyPageConsentBody =>
+      'การช่วยตรวจท่าด้วยกล้องเป็นทางเลือกและต้องได้รับอนุญาตจากผู้ใช้\n\nการไม่ใช้กล้องจะไม่ทำให้ผู้ใช้ไม่สามารถใช้ระบบตรวจท่าหลักที่ทำงานด้วยเซ็นเซอร์ได้\n\nผู้ใช้สามารถเปลี่ยนการตั้งค่านี้ได้ทุกเมื่อในหน้าการตั้งค่า';
+
+  @override
+  String get privacyPagePolicyTitle => 'นโยบายความเป็นส่วนตัว';
+
+  @override
+  String get privacyPagePolicyBody =>
+      'หน้านี้เป็นข้อมูลสรุปเกี่ยวกับแนวทางด้านความเป็นส่วนตัวของ Posture Guard\n\nก่อนเปิดให้ดาวน์โหลดแบบสาธารณะบน Google Play จะมีการเพิ่มลิงก์นโยบายความเป็นส่วนตัวอย่างเป็นทางการเพิ่มเติม';
+
+  @override
+  String get turnOffCameraAssistance => 'ปิดการช่วยตรวจด้วยกล้อง';
+
+  @override
+  String get cameraAssistanceTurnedOff =>
+      'ปิดการช่วยตรวจด้วยกล้องแล้ว การตรวจด้วยเซ็นเซอร์ยังทำงานต่อ';
+
+  @override
+  String get openAppSettings => 'เปิดการตั้งค่า';
+
+  @override
+  String get cameraPermissionNeedsSettings =>
+      'การเข้าถึงกล้องถูกปิดอยู่ การตรวจด้วยเซ็นเซอร์ยังทำงานต่อ คุณสามารถอนุญาตได้ในการตั้งค่า Android';
+
+  @override
+  String get deleteMyData => 'ลบข้อมูลของฉัน';
+
+  @override
+  String get deleteMyDataDescription =>
+      'ลบข้อมูล Posture Guard บนคลาวด์ บัญชีแบบไม่ระบุตัวตน และประวัติผู้ใช้ที่เก็บในอุปกรณ์นี้';
+
+  @override
+  String get deleteDataConfirmTitle => 'ลบข้อมูลของคุณหรือไม่';
+
+  @override
+  String get deleteDataConfirmBody =>
+      'การดำเนินการนี้จะลบข้อมูลผู้ใช้บนคลาวด์และบัญชี Firebase แบบไม่ระบุตัวตนอย่างถาวร แล้วล้างการตั้งค่า การปรับเทียบ ประวัติท่าทาง เหรียญ และของตกแต่งจากอุปกรณ์นี้ โดยจะเก็บภาษาและการเลือกสิทธิ์ของ Android ไว้';
+
+  @override
+  String get deleteDataAction => 'ลบข้อมูล';
+
+  @override
+  String get deletingData => 'กำลังลบข้อมูล…';
+
+  @override
+  String get deleteDataSuccess => 'ลบข้อมูล Posture Guard ของคุณแล้ว';
+
+  @override
+  String get deleteDataCloudFailed =>
+      'ลบข้อมูลบนคลาวด์ไม่สำเร็จ ระบบยังไม่ถือว่าการลบเสร็จ โปรดตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง';
+
+  @override
+  String get deleteDataAuthFailed =>
+      'ลบข้อมูลบนคลาวด์แล้ว แต่ลบบัญชีแบบไม่ระบุตัวตนไม่สำเร็จ โปรดลองอีกครั้งเพื่อดำเนินการให้เสร็จ';
+
+  @override
+  String get deleteDataLocalFailed =>
+      'ลบข้อมูลบนคลาวด์และบัญชีแล้ว แต่ล้างข้อมูลในอุปกรณ์ไม่เสร็จ โปรดลองอีกครั้ง';
+
+  @override
+  String get deleteDataNoUser =>
+      'ไม่พบเซสชันผู้ใช้ที่ปลอดภัย โปรดตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง';
 }

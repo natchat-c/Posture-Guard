@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'preferences_service.dart';
 
 class AuthIdentity {
   const AuthIdentity(this.uid);
@@ -13,6 +16,8 @@ abstract interface class AuthClient {
   AuthIdentity? get currentUser;
 
   Future<AuthIdentity> signInAnonymously();
+
+  Future<void> deleteCurrentUser();
 }
 
 class FirebaseAuthClient implements AuthClient {
@@ -37,19 +42,62 @@ class FirebaseAuthClient implements AuthClient {
     }
     return AuthIdentity(user.uid);
   }
+
+  @override
+  Future<void> deleteCurrentUser() async {
+    final user = _resolvedAuth.currentUser;
+    if (user == null) throw StateError('There is no Firebase user to delete.');
+    await user.delete();
+  }
+}
+
+abstract interface class AuthAccessPolicy {
+  Future<bool> isCloudAccessSuspended();
+
+  Future<void> setCloudAccessSuspended(bool suspended);
+}
+
+class SharedPreferencesAuthAccessPolicy implements AuthAccessPolicy {
+  SharedPreferencesAuthAccessPolicy({SharedPreferencesAsync? preferences})
+    : _preferences = preferences ?? SharedPreferencesAsync();
+
+  final SharedPreferencesAsync _preferences;
+
+  @override
+  Future<bool> isCloudAccessSuspended() async {
+    return await _preferences.getBool(
+          PreferenceKeys.cloudAccessSuspendedForDeletion,
+        ) ??
+        false;
+  }
+
+  @override
+  Future<void> setCloudAccessSuspended(bool suspended) async {
+    if (suspended) {
+      await _preferences.setBool(
+        PreferenceKeys.cloudAccessSuspendedForDeletion,
+        true,
+      );
+    } else {
+      await _preferences.remove(PreferenceKeys.cloudAccessSuspendedForDeletion);
+    }
+  }
 }
 
 class AuthService {
   AuthService({
     AuthClient? client,
+    AuthAccessPolicy? accessPolicy,
     this.retryDelay = const Duration(seconds: 30),
     DateTime Function()? clock,
   }) : _client = client ?? FirebaseAuthClient(),
+       _accessPolicy = accessPolicy ?? SharedPreferencesAuthAccessPolicy(),
        _clock = clock ?? DateTime.now;
 
   static final AuthService instance = AuthService();
 
   final AuthClient _client;
+  final AuthAccessPolicy _accessPolicy;
   final Duration retryDelay;
   final DateTime Function() _clock;
   Future<AuthIdentity?>? _signInInFlight;
@@ -65,7 +113,12 @@ class AuthService {
 
   String? get currentUid => currentUser?.uid;
 
-  Future<AuthIdentity?> ensureSignedIn({bool forceRetry = false}) {
+  Future<AuthIdentity?> ensureSignedIn({bool forceRetry = false}) async {
+    if (await _accessPolicy.isCloudAccessSuspended()) return null;
+    return _ensureSignedIn(forceRetry: forceRetry);
+  }
+
+  Future<AuthIdentity?> _ensureSignedIn({required bool forceRetry}) {
     final existingUser = currentUser;
     if (existingUser != null) return Future.value(existingUser);
 
@@ -90,6 +143,16 @@ class AuthService {
   Future<String?> ensureUid({bool forceRetry = false}) async {
     return (await ensureSignedIn(forceRetry: forceRetry))?.uid;
   }
+
+  Future<void> suspendCloudAccessForDeletion() {
+    return _accessPolicy.setCloudAccessSuspended(true);
+  }
+
+  Future<void> resumeCloudAccessAfterDeletion() {
+    return _accessPolicy.setCloudAccessSuspended(false);
+  }
+
+  Future<void> deleteCurrentUser() => _client.deleteCurrentUser();
 
   Future<AuthIdentity?> _signIn() async {
     try {

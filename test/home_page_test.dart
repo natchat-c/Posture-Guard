@@ -12,17 +12,20 @@ Widget _home({
   Locale locale = const Locale('en'),
   bool monitoringActive = true,
   int coinBalance = 0,
+  bool cameraActive = false,
 }) {
   return MaterialApp(
     locale: locale,
     supportedLocales: AppLocalizations.supportedLocales,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     home: MyHomePage(
-      key: ValueKey('${locale.languageCode}-$status'),
+      key: ValueKey('${locale.languageCode}-$status-$cameraActive'),
       testMode: true,
       initialPostureStatus: status,
       initialMonitoringActive: monitoringActive,
       initialCoinBalance: coinBalance,
+      initialCameraAssistEnabled: cameraActive,
+      initialCameraActive: cameraActive,
     ),
   );
 }
@@ -31,6 +34,29 @@ void main() {
   setUp(() {
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
+  });
+
+  testWidgets('camera indicator follows actual activity only', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(_home(status: 'WARNING'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cameraActiveIndicator')), findsNothing);
+
+    await tester.pumpWidget(_home(status: 'WARNING', cameraActive: true));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cameraActiveIndicator')), findsOneWidget);
+    expect(
+      find.text('Front camera active • Images are not saved'),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(_home(status: 'WARNING'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cameraActiveIndicator')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('checking-position copy is absent in English and Thai', (

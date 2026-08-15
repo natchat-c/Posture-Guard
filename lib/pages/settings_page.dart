@@ -7,13 +7,17 @@ import '../l10n/locale_controller.dart';
 import '../models/app_settings.dart';
 import '../models/calibration.dart';
 import '../services/alert_mute_service.dart';
+import '../services/camera_privacy_service.dart';
 import '../services/device_screen_time_service.dart';
 import '../services/monitoring_service.dart';
 import '../services/preferences_service.dart';
+import '../services/user_data_deletion_service.dart';
 import '../widgets/coach_mark_overlay.dart';
 import '../widgets/responsive_layout.dart';
+import 'privacy_notice_page.dart';
+import 'privacy_settings_page.dart';
 
-enum SettingsTourResult { completed, back, skipped }
+enum SettingsTourResult { completed, back, skipped, dataDeleted }
 
 enum _SettingsTourItem {
   monitoring,
@@ -42,6 +46,12 @@ class Settings extends StatefulWidget {
     this.showGuidedTour = false,
     this.loadNotificationPermission,
     this.requestNotificationPermission,
+    this.cameraCoordinator,
+    this.deletionService,
+    this.onCameraAssistChanged,
+    this.onPrepareForDataDeletion,
+    this.onDataDeletionFailed,
+    this.onDataDeleted,
   });
 
   final SettingsStore store;
@@ -60,6 +70,12 @@ class Settings extends StatefulWidget {
   final Future<NotificationPermission> Function()? loadNotificationPermission;
   final Future<NotificationPermission> Function()?
   requestNotificationPermission;
+  final CameraAssistPermissionCoordinator? cameraCoordinator;
+  final UserDataDeletionService? deletionService;
+  final Future<void> Function(bool enabled)? onCameraAssistChanged;
+  final Future<void> Function()? onPrepareForDataDeletion;
+  final Future<void> Function()? onDataDeletionFailed;
+  final Future<void> Function()? onDataDeleted;
 
   @override
   State<Settings> createState() => _SettingsState();
@@ -111,6 +127,10 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
   late final AlertMuteController _alertMuteController;
   DateTime? _alertsMutedUntil;
   Timer? _muteStatusTimer;
+  late final CameraAssistPermissionCoordinator _cameraCoordinator;
+  late final UserDataDeletionService _deletionService;
+  bool _cameraAssistEnabled = false;
+  bool _cameraAssistChanging = false;
 
   @override
   void initState() {
@@ -119,12 +139,16 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
     _screenTimeProvider =
         widget.screenTimeProvider ?? createDeviceScreenTimeProvider();
     _alertMuteController = widget.alertMuteController ?? AlertMuteController();
+    _cameraCoordinator =
+        widget.cameraCoordinator ?? CameraAssistPermissionCoordinator();
+    _deletionService = widget.deletionService ?? UserDataDeletionService();
     _calibration = widget.initialCalibration;
     _hasCalibration = widget.initialHasCalibration || _calibration != null;
     _load();
     _refreshUsageAccess();
     _refreshNotificationPermission();
     _refreshAlertMute();
+    _refreshCameraAssist();
     _muteStatusTimer = Timer.periodic(
       const Duration(minutes: 1),
       (_) => _refreshAlertMute(),
@@ -189,6 +213,87 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
       _refreshUsageAccess();
       _refreshNotificationPermission();
       _refreshAlertMute();
+      _refreshCameraAssist(reconcilePermission: true);
+    }
+  }
+
+  Future<void> _refreshCameraAssist({bool reconcilePermission = false}) async {
+    final enabled = reconcilePermission
+        ? (await _cameraCoordinator.reconcilePermission()).enabled
+        : await _cameraCoordinator.isEnabled();
+    if (!mounted) return;
+    final changed = _cameraAssistEnabled != enabled;
+    setState(() => _cameraAssistEnabled = enabled);
+    if (changed && reconcilePermission) {
+      await widget.onCameraAssistChanged?.call(enabled);
+    }
+  }
+
+  Future<void> _setCameraAssistEnabled(bool enabled) async {
+    if (_cameraAssistChanging) return;
+    setState(() => _cameraAssistChanging = true);
+    try {
+      if (!enabled) {
+        await _cameraCoordinator.disable();
+        await widget.onCameraAssistChanged?.call(false);
+        if (mounted) setState(() => _cameraAssistEnabled = false);
+        return;
+      }
+
+      if (await _cameraCoordinator.needsExplanation()) {
+        if (!mounted) return;
+        final proceed = await showCameraPermissionExplanationDialog(context);
+        if (!proceed) return;
+      }
+      final result = await _cameraCoordinator.enableAfterExplanation();
+      await widget.onCameraAssistChanged?.call(result.enabled);
+      if (!mounted) return;
+      setState(() => _cameraAssistEnabled = result.enabled);
+      if (result.enabled) return;
+
+      final l10n = context.l10n;
+      final snackBar = SnackBar(
+        content: Text(
+          result.shouldOfferSettings
+              ? l10n.cameraPermissionNeedsSettings
+              : l10n.cameraNotGranted,
+        ),
+        action: result.shouldOfferSettings
+            ? SnackBarAction(
+                label: l10n.openAppSettings,
+                onPressed: () => _cameraCoordinator.openSettings(),
+              )
+            : null,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    } finally {
+      if (mounted) setState(() => _cameraAssistChanging = false);
+    }
+  }
+
+  Future<void> _openPrivacySettings() async {
+    final result = await Navigator.push<PrivacySettingsResult>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PrivacySettingsPage(
+          cameraCoordinator: _cameraCoordinator,
+          deletionService: _deletionService,
+          onCameraAssistChanged: (enabled) async {
+            await widget.onCameraAssistChanged?.call(enabled);
+            if (mounted) setState(() => _cameraAssistEnabled = enabled);
+          },
+          onPrepareForDataDeletion:
+              widget.onPrepareForDataDeletion ?? () async {},
+          onDataDeletionFailed: widget.onDataDeletionFailed ?? () async {},
+          onDataDeleted: widget.onDataDeleted ?? () async {},
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (result == PrivacySettingsResult.dataDeleted) {
+      Navigator.pop(context, SettingsTourResult.dataDeleted);
+    } else {
+      await _refreshCameraAssist();
     }
   }
 
@@ -1080,6 +1185,35 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
                                       : l10n.setPosition,
                                 ),
                               ),
+                            ),
+                            const Divider(height: 36),
+                            SwitchListTile(
+                              key: const Key('cameraAssistEnabledSwitch'),
+                              contentPadding: EdgeInsets.zero,
+                              secondary: const Icon(
+                                Icons.camera_front_outlined,
+                              ),
+                              title: Text(l10n.cameraAssistTitle),
+                              subtitle: Text(
+                                l10n.cameraAssistSettingDescription,
+                              ),
+                              value: _cameraAssistEnabled,
+                              onChanged:
+                                  _saving ||
+                                      _cameraAssistChanging ||
+                                      _changingMonitoringState
+                                  ? null
+                                  : _setCameraAssistEnabled,
+                            ),
+                            ListTile(
+                              key: const Key('cameraPrivacySettingsTile'),
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.privacy_tip_outlined),
+                              title: Text(l10n.cameraAndPrivacy),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: _cameraAssistChanging || _saving
+                                  ? null
+                                  : _openPrivacySettings,
                             ),
                           ],
                         ),

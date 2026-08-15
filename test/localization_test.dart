@@ -86,6 +86,10 @@ void main() {
       expect(thai.settings, 'การตั้งค่า');
       expect(english.appTitle, 'Posture Guard');
       expect(thai.appTitle, 'Posture Guard');
+      expect(english.cameraAndPrivacy, 'Privacy & PDPA');
+      expect(thai.cameraAndPrivacy, 'ความเป็นส่วนตัวและ PDPA');
+      expect(english.cameraExplanationTitle, 'Camera assistance');
+      expect(thai.cameraExplanationTitle, 'การช่วยตรวจท่าด้วยกล้อง');
     },
   );
 
@@ -100,7 +104,9 @@ void main() {
     expect(await restored.load(), 'th');
   });
 
-  testWidgets('saved Thai opens the first tutorial in Thai', (tester) async {
+  testWidgets('saved Thai opens privacy then the first tutorial in Thai', (
+    tester,
+  ) async {
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.withData({
           PreferenceKeys.selectedLanguageCode: 'th',
@@ -110,6 +116,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('เลือกภาษา'), findsNothing);
+    expect(
+      find.byKey(const Key('privacyNoticeSensorsOnlyButton')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('privacyNoticeSensorsOnlyButton')));
+    await tester.pumpAndSettle();
     expect(find.text('ยินดีต้อนรับสู่ Posture Guard'), findsOneWidget);
   });
 

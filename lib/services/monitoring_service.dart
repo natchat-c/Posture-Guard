@@ -27,7 +27,7 @@ import 'screen_state_service.dart';
 import 'statistics_repository.dart';
 import 'user_database_paths.dart';
 
-const String _pendingStatsKey = 'pendingMonitoringStats';
+const String _pendingStatsKey = PreferenceKeys.pendingMonitoringStats;
 
 enum NotificationPermission { granted, denied, permanentlyDenied }
 

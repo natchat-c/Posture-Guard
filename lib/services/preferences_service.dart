@@ -28,6 +28,14 @@ class PreferenceKeys {
   static const String notificationPermissionRequested =
       'notificationPermissionRequested';
   static const String cameraPermissionRequested = 'cameraPermissionRequested';
+  static const String cameraPrivacyNoticeAcknowledged =
+      'cameraPrivacyNoticeAcknowledged';
+  static const String cameraAssistEnabled = 'cameraAssistEnabled';
+  static const String cloudAccessSuspendedForDeletion =
+      'cloudAccessSuspendedForDeletion';
+  static const String pendingLocalCleanupAfterAccountDeletion =
+      'pendingLocalCleanupAfterAccountDeletion';
+  static const String pendingAccountDeletionUid = 'pendingAccountDeletionUid';
   static const String alertsMutedUntilEpochMs = 'alertsMutedUntilEpochMs';
   static const String equippedHatId = 'equippedHatId';
   static const String equippedEyewearId = 'equippedEyewearId';
@@ -35,6 +43,47 @@ class PreferenceKeys {
   static const String equippedBackId = 'equippedBackId';
   static const String cosmeticEconomyVersion = 'cosmeticEconomyVersion';
   static const String ownedCosmeticIds = 'ownedCosmeticIds';
+  static const String localCoinState = 'localCoinStateV2';
+  static const String localCoinStatePendingSync = 'localCoinStatePendingSyncV2';
+  static const String localStatisticsState = 'localStatisticsStateV2';
+  static const String cloudStatisticsCache = 'cloudStatisticsCacheV2';
+  static const String localDeviceScreenTime = 'localDeviceScreenTimeV2';
+  static const String pendingMonitoringStats = 'pendingMonitoringStats';
+
+  /// Local state that belongs to the anonymous user and is safe to erase.
+  ///
+  /// App-wide choices and OS prompt history (language and permission-request
+  /// markers) deliberately remain so deletion cannot trigger surprise prompts.
+  static const Set<String> userDataKeys = {
+    hasCachedSettings,
+    monitoringEnabled,
+    alertDelaySeconds,
+    alertFrequencySeconds,
+    alertsEnabled,
+    settingsPendingSync,
+    settingsUpdatedAtEpochMs,
+    hasCalibration,
+    neutralPhoneAngle,
+    neutralHeadX,
+    calibrationPendingSync,
+    calibrationUpdatedAtEpochMs,
+    hasCompletedTutorial,
+    alertsMutedUntilEpochMs,
+    equippedHatId,
+    equippedEyewearId,
+    equippedHoldingId,
+    equippedBackId,
+    cosmeticEconomyVersion,
+    ownedCosmeticIds,
+    localCoinState,
+    localCoinStatePendingSync,
+    localStatisticsState,
+    cloudStatisticsCache,
+    localDeviceScreenTime,
+    pendingMonitoringStats,
+    cameraPrivacyNoticeAcknowledged,
+    cameraAssistEnabled,
+  };
 }
 
 class SettingsLoadResult {

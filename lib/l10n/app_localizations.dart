@@ -1405,6 +1405,306 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Posture Guard needs attention. Open Settings and try again.'**
   String get monitoringProblem;
+
+  /// No description provided for @privacyNoticeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera privacy'**
+  String get privacyNoticeTitle;
+
+  /// No description provided for @privacyNoticeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Posture Guard can use your front camera to help check your posture while you use your phone.'**
+  String get privacyNoticeBody;
+
+  /// No description provided for @privacyNoticeDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera images are processed on your device only. They are not saved or uploaded. You can turn camera assistance off at any time and continue monitoring with your phone\'s angle sensors.'**
+  String get privacyNoticeDetail;
+
+  /// No description provided for @useSensorsOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Use sensors only'**
+  String get useSensorsOnly;
+
+  /// No description provided for @cameraAssistTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use camera to help detect posture'**
+  String get cameraAssistTitle;
+
+  /// No description provided for @cameraAssistSettingDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional front-camera assistance while this app is visible. Sensor monitoring works without it.'**
+  String get cameraAssistSettingDescription;
+
+  /// No description provided for @cameraExplanationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera assistance'**
+  String get cameraExplanationTitle;
+
+  /// No description provided for @cameraExplanationBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Posture Guard can use your front camera to help improve posture detection while the app is open.\n\nCamera images are processed on your device, are not saved, and are not uploaded.\n\nCamera access is optional. If you choose not to allow it, posture monitoring will continue using your phone\'s motion sensors.'**
+  String get cameraExplanationBody;
+
+  /// No description provided for @notNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get notNow;
+
+  /// No description provided for @cameraActiveIndicator.
+  ///
+  /// In en, this message translates to:
+  /// **'Front camera active • Images are not saved'**
+  String get cameraActiveIndicator;
+
+  /// No description provided for @cameraAndPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy & PDPA'**
+  String get cameraAndPrivacy;
+
+  /// No description provided for @privacyInformationBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The front camera may be used only as an optional posture signal while this app is visible and posture monitoring needs extra help. Images are processed on this device, discarded after analysis, and are never saved or uploaded. You can always use sensor-only monitoring.'**
+  String get privacyInformationBody;
+
+  /// No description provided for @privacyPageIntroduction.
+  ///
+  /// In en, this message translates to:
+  /// **'Posture Guard is designed to monitor posture while giving you control over how your device data and camera are used.\n\nThe app primarily uses your phone\'s motion sensors to estimate posture. You may also choose to enable the front camera to help improve posture detection while the app is open.'**
+  String get privacyPageIntroduction;
+
+  /// No description provided for @privacyPageCameraUseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera use'**
+  String get privacyPageCameraUseTitle;
+
+  /// No description provided for @privacyPageCameraUseIntroduction.
+  ///
+  /// In en, this message translates to:
+  /// **'The front camera is optional.\n\nIf camera assistance is enabled:'**
+  String get privacyPageCameraUseIntroduction;
+
+  /// No description provided for @privacyPageCameraUseItems.
+  ///
+  /// In en, this message translates to:
+  /// **'The front camera is used only to help estimate your posture.\nCamera images are processed directly on your device.\nCamera images are not saved.\nCamera images are not uploaded to Firebase or any external server.\nCamera images are discarded after processing.\nCamera assistance is used only while the app is active and the feature is needed.'**
+  String get privacyPageCameraUseItems;
+
+  /// No description provided for @privacyPageCameraUseClosing.
+  ///
+  /// In en, this message translates to:
+  /// **'You can turn camera assistance off at any time. Posture Guard will continue monitoring posture using your phone\'s motion sensors.'**
+  String get privacyPageCameraUseClosing;
+
+  /// No description provided for @privacyPageCameraPermissionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera permission'**
+  String get privacyPageCameraPermissionTitle;
+
+  /// No description provided for @privacyPageCameraPermissionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Posture Guard will explain why camera access is needed before Android asks for camera permission.\n\nCamera access is optional.\n\nIf you deny camera permission, posture monitoring will continue using motion sensors.\n\nYou can also revoke camera permission later through your device settings.'**
+  String get privacyPageCameraPermissionBody;
+
+  /// No description provided for @privacyPageDataStoredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Data we store'**
+  String get privacyPageDataStoredTitle;
+
+  /// No description provided for @privacyPageDataStoredIntroduction.
+  ///
+  /// In en, this message translates to:
+  /// **'Posture Guard may store information needed for the app to work, including:'**
+  String get privacyPageDataStoredIntroduction;
+
+  /// No description provided for @privacyPageDataStoredItems.
+  ///
+  /// In en, this message translates to:
+  /// **'App settings\nPosture calibration\nPosture statistics\nMonitoring history\nCoins\nOwned and equipped cosmetics\nApp progress\nCamera-assistance preferences'**
+  String get privacyPageDataStoredItems;
+
+  /// No description provided for @privacyPageDataStoredClosing.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud data is stored under your anonymous Firebase account so that your data is separated from other users.\n\nPosture Guard does not require your name, email address, or password to create this anonymous account.'**
+  String get privacyPageDataStoredClosing;
+
+  /// No description provided for @privacyPageFirebaseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Firebase and cloud data'**
+  String get privacyPageFirebaseTitle;
+
+  /// No description provided for @privacyPageFirebaseBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Posture Guard uses Firebase to store and synchronize selected app data.\n\nEach installation is assigned an anonymous Firebase user ID.\n\nYour Firebase user ID is used to keep your cloud data separate from other users.\n\nPosture Guard does not use this anonymous account to identify you by name.'**
+  String get privacyPageFirebaseBody;
+
+  /// No description provided for @privacyPageChoicesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your choices'**
+  String get privacyPageChoicesTitle;
+
+  /// No description provided for @privacyPageChoicesItems.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Posture Guard without the camera.\nTurn camera assistance on or off.\nDeny or revoke camera permission.\nContinue using sensor-based posture monitoring if camera access is unavailable.\nReview this privacy information at any time.\nDelete your Posture Guard data from Settings.'**
+  String get privacyPageChoicesItems;
+
+  /// No description provided for @privacyPageDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your data'**
+  String get privacyPageDeleteTitle;
+
+  /// No description provided for @privacyPageDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can use \"Delete my data\" in Settings to remove your Posture Guard cloud data and anonymous Firebase account.\n\nThe app will ask you to confirm before deletion.\n\nIf deletion cannot be completed, Posture Guard will not falsely report that your data has been deleted.'**
+  String get privacyPageDeleteBody;
+
+  /// No description provided for @privacyPageCameraIndicatorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera indicator'**
+  String get privacyPageCameraIndicatorTitle;
+
+  /// No description provided for @privacyPageCameraIndicatorBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Whenever the front camera is actually active for posture assistance, Posture Guard displays an in-app camera activity indicator.\n\nThis lets you know when the camera is being used.'**
+  String get privacyPageCameraIndicatorBody;
+
+  /// No description provided for @privacyPageConsentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Consent and control'**
+  String get privacyPageConsentTitle;
+
+  /// No description provided for @privacyPageConsentBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera assistance is optional and requires your permission.\n\nChoosing not to use the camera does not prevent you from using Posture Guard\'s main sensor-based posture monitoring.\n\nYou can change your choice at any time in Settings.'**
+  String get privacyPageConsentBody;
+
+  /// No description provided for @privacyPagePolicyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get privacyPagePolicyTitle;
+
+  /// No description provided for @privacyPagePolicyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This in-app page provides a summary of Posture Guard\'s privacy practices.\n\nA hosted Privacy Policy URL will also be provided for the Google Play Store before public release.'**
+  String get privacyPagePolicyBody;
+
+  /// No description provided for @turnOffCameraAssistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off camera assistance'**
+  String get turnOffCameraAssistance;
+
+  /// No description provided for @cameraAssistanceTurnedOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera assistance is off. Sensor monitoring continues.'**
+  String get cameraAssistanceTurnedOff;
+
+  /// No description provided for @openAppSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Settings'**
+  String get openAppSettings;
+
+  /// No description provided for @cameraPermissionNeedsSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera access is blocked. Sensor monitoring continues. You can allow access in Android Settings.'**
+  String get cameraPermissionNeedsSettings;
+
+  /// No description provided for @deleteMyData.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my data'**
+  String get deleteMyData;
+
+  /// No description provided for @deleteMyDataDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your Posture Guard cloud data, anonymous identity, and user history stored on this device.'**
+  String get deleteMyDataDescription;
+
+  /// No description provided for @deleteDataConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your data?'**
+  String get deleteDataConfirmTitle;
+
+  /// No description provided for @deleteDataConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently deletes your cloud user data and anonymous Firebase identity, then clears your settings, calibration, posture history, coins, and cosmetics from this device. Language and Android permission choices are preserved.'**
+  String get deleteDataConfirmBody;
+
+  /// No description provided for @deleteDataAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete data'**
+  String get deleteDataAction;
+
+  /// No description provided for @deletingData.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleting data…'**
+  String get deletingData;
+
+  /// No description provided for @deleteDataSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Posture Guard data was deleted.'**
+  String get deleteDataSuccess;
+
+  /// No description provided for @deleteDataCloudFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud data could not be deleted. Nothing was reported as complete. Check your connection and retry.'**
+  String get deleteDataCloudFailed;
+
+  /// No description provided for @deleteDataAuthFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud data was deleted, but the anonymous identity could not be removed. Retry to finish deletion.'**
+  String get deleteDataAuthFailed;
+
+  /// No description provided for @deleteDataLocalFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud data and identity were deleted, but local cleanup did not finish. Retry to complete it.'**
+  String get deleteDataLocalFailed;
+
+  /// No description provided for @deleteDataNoUser.
+  ///
+  /// In en, this message translates to:
+  /// **'A secure user session could not be found. Check your connection and retry.'**
+  String get deleteDataNoUser;
 }
 
 class _AppLocalizationsDelegate

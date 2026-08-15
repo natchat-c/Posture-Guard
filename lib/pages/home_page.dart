@@ -4,9 +4,7 @@ import 'dart:math';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:sensors_plus/sensors_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../functions/posture_check.dart';
 import '../l10n/locale_controller.dart';
@@ -16,11 +14,15 @@ import '../models/home_live_times.dart';
 import '../models/posture_thresholds.dart';
 import '../platform/platform_capabilities.dart';
 import '../services/cosmetic_repository.dart';
+import '../services/camera_privacy_service.dart';
 import '../services/device_screen_time_service.dart';
 import '../services/coin_repository.dart';
+import '../services/face_detector_lifecycle.dart';
 import '../services/monitoring_service.dart';
 import '../services/preferences_service.dart';
 import '../services/statistics_repository.dart';
+import '../services/user_data_deletion_service.dart';
+import '../widgets/camera_active_indicator.dart';
 import '../widgets/coach_mark_overlay.dart';
 import '../widgets/responsive_layout.dart';
 import '../widgets/slime_character.dart';
@@ -40,6 +42,11 @@ class MyHomePage extends StatefulWidget {
     @visibleForTesting this.initialCoinBalance = 0,
     @visibleForTesting this.cosmeticStore,
     @visibleForTesting this.initialCosmetics = CosmeticSelection.none,
+    @visibleForTesting this.cameraCoordinator,
+    @visibleForTesting this.faceDetectorLifecycle,
+    @visibleForTesting this.deletionService,
+    @visibleForTesting this.initialCameraAssistEnabled = false,
+    @visibleForTesting this.initialCameraActive = false,
   });
 
   final bool showTourOnStart;
@@ -51,6 +58,11 @@ class MyHomePage extends StatefulWidget {
   final int initialCoinBalance;
   final CosmeticStore? cosmeticStore;
   final CosmeticSelection initialCosmetics;
+  final CameraAssistPermissionCoordinator? cameraCoordinator;
+  final FaceDetectorLifecycle? faceDetectorLifecycle;
+  final UserDataDeletionService? deletionService;
+  final bool initialCameraAssistEnabled;
+  final bool initialCameraActive;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -65,7 +77,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   late final StatisticsRepository _statisticsRepository;
   final CoinRepository _coinRepository = CoinRepository();
   late final CosmeticStore _cosmeticRepository;
-  final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
   final CameraFrameStability _cameraFrameStability = CameraFrameStability();
   late final DeviceScreenTimeProvider _deviceScreenTimeProvider;
   final PresentationTicker _presentationTicker = PresentationTicker();
@@ -75,6 +86,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   final GlobalKey _coinTourKey = GlobalKey();
   final GlobalKey _customizeTourKey = GlobalKey();
   late final HomeLiveTimes _liveTimes;
+  late final CameraAssistPermissionCoordinator _cameraCoordinator;
+  late final FaceDetectorLifecycle _faceDetectorLifecycle;
+  late final UserDataDeletionService _deletionService;
 
   StreamSubscription<DailyStats>? _statsSubscription;
   Timer? _serviceStateTimer;
@@ -101,7 +115,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   CosmeticSelection _cosmetics = CosmeticSelection.none;
 
   CameraController? _cameraController;
-  FaceDetector? _faceDetector;
+  bool _cameraAssistEnabled = false;
   bool _cameraActive = false;
   bool _cameraStarting = false;
   bool _cameraStopping = false;
@@ -116,6 +130,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   double? _headZ;
   int? _tourStep;
   int? _preparedTourStep;
+  bool _monitoringWasActiveBeforeDeletion = false;
 
   bool get _appIsVisible {
     return WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
@@ -131,6 +146,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     _totalCoins = max(0, widget.initialCoinBalance);
     _cosmetics = widget.initialCosmetics;
     _cosmeticRepository = widget.cosmeticStore ?? CosmeticRepository();
+    _cameraCoordinator =
+        widget.cameraCoordinator ?? CameraAssistPermissionCoordinator();
+    _faceDetectorLifecycle =
+        widget.faceDetectorLifecycle ?? FaceDetectorLifecycle();
+    _deletionService = widget.deletionService ?? UserDataDeletionService();
     _settingsRepository = widget.settingsStore ?? SettingsRepository();
     _deviceScreenTimeProvider =
         widget.screenTimeProvider ?? createDeviceScreenTimeProvider();
@@ -144,6 +164,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (widget.testMode) {
       _initializing = false;
       _monitoringActive = widget.initialMonitoringActive;
+      _cameraAssistEnabled = widget.initialCameraAssistEnabled;
+      _cameraPermissionGranted = widget.initialCameraAssistEnabled;
+      _cameraActive = widget.initialCameraActive;
       if (widget.cosmeticStore != null) {
         unawaited(_loadCosmeticsForTesting());
       }
@@ -168,7 +191,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     final calibrationResult = await _calibrationRepository.load();
     final cosmetics = await _loadCosmeticSelection();
     await _loadCoinsAndAwardCompletedDays();
-    await _refreshCameraPermissionStatus();
+    final cameraState = await _cameraCoordinator.reconcilePermission();
     await _refreshDeviceScreenTime();
     final running = await MonitoringService.isRunning();
 
@@ -176,6 +199,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     setState(() {
       _calibration = calibrationResult.calibration;
       _cosmetics = cosmetics;
+      _cameraAssistEnabled = cameraState.enabled;
+      _cameraPermissionGranted =
+          cameraState.permissionState == CameraPermissionState.granted;
       _monitoringActive = running;
       _initializing = false;
     });
@@ -385,8 +411,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
 
     unawaited(
-      _refreshCameraPermissionStatus().then((_) async {
-        _cameraUnavailableForSession = false;
+      _reconcileCameraPermission().then((_) async {
         await _refreshPresentationSources();
         await _manageCamera();
       }),
@@ -411,7 +436,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       _cameraUnavailableForSession = false;
     });
 
-    await _requestCameraPermissionOnce();
     final result = await MonitoringService.start();
     if (!mounted) {
       return MonitoringControlResult(
@@ -572,6 +596,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _openSettings() async {
+    await _stopCamera();
+    if (!mounted) return;
     final guided = _tourStep == 1;
     if (guided) setState(() => _tourStep = null);
     final tourResult = await Navigator.push<SettingsTourResult>(
@@ -588,6 +614,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           onMonitoringEnabledChanged: (enabled) {
             return enabled ? _startMonitoring() : _stopMonitoring();
           },
+          cameraCoordinator: _cameraCoordinator,
+          deletionService: _deletionService,
+          onCameraAssistChanged: _setCameraAssistEnabledFromSettings,
+          onPrepareForDataDeletion: _prepareForDataDeletion,
+          onDataDeletionFailed: _restoreAfterDataDeletionFailure,
+          onDataDeleted: _applyDeletedLocalState,
           onSettingsSaved: (settings) async {
             MonitoringService.updateSettings(settings);
           },
@@ -595,6 +627,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         ),
       ),
     );
+
+    if (tourResult == SettingsTourResult.dataDeleted) return;
 
     final result = await _settingsRepository.load();
     if (!mounted) return;
@@ -606,12 +640,66 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       _tourStep = switch (tourResult) {
         SettingsTourResult.completed => 2,
         SettingsTourResult.skipped => null,
+        SettingsTourResult.dataDeleted => null,
         SettingsTourResult.back || null => 1,
       };
     });
   }
 
+  Future<void> _prepareForDataDeletion() async {
+    _monitoringWasActiveBeforeDeletion = _monitoringActive;
+    await _stopCamera();
+    if (!_monitoringWasActiveBeforeDeletion) return;
+    final result = await MonitoringService.stop();
+    if (!mounted) return;
+    setState(() {
+      _monitoringActive = result.isRunning;
+      if (!result.isRunning) _postureStatus = 'GOOD';
+    });
+  }
+
+  Future<void> _restoreAfterDataDeletionFailure() async {
+    if (!_monitoringWasActiveBeforeDeletion) return;
+    final result = await MonitoringService.start();
+    if (!mounted) return;
+    setState(() => _monitoringActive = result.success && result.isRunning);
+    if (_monitoringActive) {
+      MonitoringService.requestState();
+      await _manageCamera();
+    }
+  }
+
+  Future<void> _applyDeletedLocalState() async {
+    await _stopCamera();
+    await _statsSubscription?.cancel();
+    _statsSubscription = null;
+    if (!mounted) return;
+    setState(() {
+      _calibration = null;
+      _stats = const DailyStats();
+      _liveTimes
+        ..monitoredSeconds = 0
+        ..badPostureSeconds = 0
+        ..deviceScreenTimeSeconds = null;
+      _lastSavedDeviceScreenTime = null;
+      _totalCoins = 0;
+      _cosmetics = CosmeticSelection.none;
+      _monitoringActive = false;
+      _postureStatus = 'GOOD';
+      _hasPhoneAngle = false;
+      _recentPhoneAngles.clear();
+      _cameraAssistEnabled = false;
+      _cameraPermissionGranted = false;
+      _cameraStatusMessage = null;
+      _monitoringError = null;
+      _tourStep = null;
+    });
+    _monitoringWasActiveBeforeDeletion = false;
+  }
+
   Future<void> _openCustomize() async {
+    await _stopCamera();
+    if (!mounted) return;
     final guided = _tourStep == 3;
     if (guided) setState(() => _tourStep = null);
     final tourResult = await Navigator.push<CustomizeTourResult>(
@@ -642,42 +730,45 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     return _monitoringActive;
   }
 
-  Future<void> _requestCameraPermissionOnce() async {
-    final status = await Permission.camera.status;
-    if (status.isGranted) {
-      if (mounted) setState(() => _cameraPermissionGranted = true);
-      return;
+  Future<void> _reconcileCameraPermission() async {
+    final state = await _cameraCoordinator.reconcilePermission();
+    final permissionGranted =
+        state.permissionState == CameraPermissionState.granted;
+    if (mounted) {
+      setState(() {
+        _cameraAssistEnabled = state.enabled;
+        _cameraPermissionGranted = permissionGranted;
+      });
+    } else {
+      _cameraAssistEnabled = state.enabled;
+      _cameraPermissionGranted = permissionGranted;
     }
-
-    final alreadyRequested =
-        await _preferences.getBool(PreferenceKeys.cameraPermissionRequested) ??
-        false;
-    if (alreadyRequested || status.isPermanentlyDenied || !mounted) {
-      if (mounted) setState(() => _cameraPermissionGranted = false);
-      return;
-    }
-
-    await _preferences.setBool(PreferenceKeys.cameraPermissionRequested, true);
-    final requested = await Permission.camera.request();
-    if (!mounted) return;
-    setState(() => _cameraPermissionGranted = requested.isGranted);
-    if (!requested.isGranted) {
-      _showMessage(context.l10n.cameraNotGranted);
-    }
+    if (!state.enabled) await _stopCamera();
   }
 
-  Future<void> _refreshCameraPermissionStatus() async {
-    try {
-      final status = await Permission.camera.status;
-      if (mounted) {
-        setState(() => _cameraPermissionGranted = status.isGranted);
-      } else {
-        _cameraPermissionGranted = status.isGranted;
-      }
-    } catch (error) {
-      debugPrint('Could not check camera permission: $error');
-      _cameraPermissionGranted = false;
+  Future<void> _setCameraAssistEnabledFromSettings(bool enabled) async {
+    if (enabled) {
+      _faceDetectorLifecycle.allowRetry();
+      final permission = await _cameraCoordinator.permissionStatus();
+      if (!mounted) return;
+      setState(() {
+        _cameraAssistEnabled = true;
+        _cameraPermissionGranted = permission == CameraPermissionState.granted;
+        _cameraUnavailableForSession = false;
+        _cameraStatusMessage = null;
+      });
+      await _manageCamera();
+      return;
     }
+    if (mounted) {
+      setState(() {
+        _cameraAssistEnabled = false;
+        _cameraStatusMessage = null;
+      });
+    } else {
+      _cameraAssistEnabled = false;
+    }
+    await _stopCamera();
   }
 
   Future<void> _manageCamera() async {
@@ -685,9 +776,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     final calibration = _calibration;
     final allowed =
         _monitoringActive &&
-        _appIsVisible &&
+        _homeIsVisible &&
         _screenInteractive &&
         _hasPhoneAngle &&
+        _cameraAssistEnabled &&
         _cameraPermissionGranted &&
         calibration != null;
     if (!allowed) {
@@ -713,7 +805,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         _cameraUnavailableForSession) {
       return;
     }
-    if (!_monitoringActive || !_appIsVisible || !_cameraPermissionGranted) {
+    if (!_monitoringActive ||
+        !_homeIsVisible ||
+        !_cameraAssistEnabled ||
+        !_cameraPermissionGranted) {
       return;
     }
 
@@ -741,28 +836,27 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
       if (!mounted ||
           !_monitoringActive ||
-          !_appIsVisible ||
+          !_homeIsVisible ||
+          !_cameraAssistEnabled ||
           !_cameraPermissionGranted) {
         await controller.dispose();
         return;
       }
 
-      _faceDetector ??= FaceDetector(
-        options: FaceDetectorOptions(
-          performanceMode: FaceDetectorMode.fast,
-          enableLandmarks: true,
-          enableContours: false,
-          enableTracking: true,
-        ),
-      );
+      if (!_faceDetectorLifecycle.start()) {
+        await controller.dispose();
+        _markCameraUnavailable(l10n.cameraUnavailable);
+        return;
+      }
       _cameraController = controller;
-      _cameraActive = true;
       _cameraStatusMessage = null;
       await controller.startImageStream(_processCameraImage);
+      _cameraActive = true;
       if (mounted) setState(() {});
     } catch (error) {
       debugPrint('Camera initialization failed: $error');
       await _disposeCurrentCameraController();
+      await _faceDetectorLifecycle.stop();
       _markCameraUnavailable(l10n.cameraUnavailable);
     } finally {
       _cameraStarting = false;
@@ -776,6 +870,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     MonitoringService.updateCameraSupplement(available: false);
     try {
       await _disposeCurrentCameraController();
+      await _faceDetectorLifecycle.stop();
     } finally {
       _cameraStopping = false;
       _clearCameraData();
@@ -825,16 +920,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       return;
     }
 
-    final detector = _faceDetector;
-    if (detector == null) return;
+    if (!_faceDetectorLifecycle.isStarted) return;
     _lastFaceDetectionTime = now;
     _processingCameraFrame = true;
     try {
       final inputImage = _inputImageFromCameraImage(image);
-      if (inputImage == null) return;
+      if (inputImage == null) {
+        await _handleCameraProcessingFailure();
+        return;
+      }
 
       // Frames are processed on-device and are never saved or uploaded.
-      final faces = await detector.processImage(inputImage);
+      final faces = await _faceDetectorLifecycle.processImage(inputImage);
       if (!mounted || !_cameraActive) return;
       if (faces.isEmpty) {
         _clearCameraData();
@@ -887,10 +984,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       );
     } catch (error) {
       debugPrint('Face detection failed: $error');
-      _markCameraUnavailable(context.l10n.cameraUnavailable);
+      await _handleCameraProcessingFailure();
     } finally {
       _processingCameraFrame = false;
     }
+  }
+
+  Future<void> _handleCameraProcessingFailure() async {
+    _cameraActive = false;
+    await _disposeCurrentCameraController();
+    await _faceDetectorLifecycle.markFaulted();
+    if (!mounted) return;
+    _markCameraUnavailable(context.l10n.cameraUnavailable);
   }
 
   InputImage? _inputImageFromCameraImage(CameraImage image) {
@@ -1055,9 +1160,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Future<void> _disposeCameraResources() async {
     await _stopCamera();
-    final detector = _faceDetector;
-    _faceDetector = null;
-    await detector?.close();
+    await _faceDetectorLifecycle.stop();
   }
 
   @override
@@ -1232,7 +1335,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                             3 +
                             postureMessageBudget +
                             5 +
-                            scoreFontSize * 1.15 * textScale;
+                            scoreFontSize * 1.15 * textScale +
+                            (_cameraActive ? 34 * textScale : 0) +
+                            (_cameraStatusMessage != null ? 32 * textScale : 0);
                         final metricsBudget = max(58.0, 54 * textScale);
                         final imageGap = isShort ? 6.0 : 15.0;
                         final metricsGap = isShort ? 6.0 : 12.0;
@@ -1345,6 +1450,28 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                                 ),
                                               ),
                                             ),
+                                          if (_cameraActive)
+                                            const Padding(
+                                              padding: EdgeInsets.only(top: 6),
+                                              child: CameraActiveIndicator(
+                                                visible: true,
+                                              ),
+                                            ),
+                                          if (_cameraStatusMessage != null)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 5,
+                                              ),
+                                              child: Text(
+                                                _cameraStatusMessage!,
+                                                maxLines: 2,
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  fontSize: helperFontSize,
+                                                  height: 1.1,
+                                                ),
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -1365,31 +1492,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                           max(0, characterHeight) *
                                           characterAspectRatio,
                                       height: max(0, characterHeight),
-                                      child: Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          SlimeCharacter(
-                                            expression: _slimeExpression,
-                                            selection: _cosmetics,
-                                          ),
-                                          if (_cameraStatusMessage != null)
-                                            Align(
-                                              alignment: Alignment.topCenter,
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(
-                                                  6,
-                                                ),
-                                                child: Text(
-                                                  _cameraStatusMessage!,
-                                                  maxLines: 2,
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(
-                                                    fontSize: 13,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                        ],
+                                      child: SlimeCharacter(
+                                        expression: _slimeExpression,
+                                        selection: _cosmetics,
                                       ),
                                     ),
                                   ),
@@ -1467,8 +1572,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                               heroTag: 'homeStatisticsButton',
                               tooltip: l10n.statistics,
                               onPressed: () async {
-                                await Navigator.push<void>(
-                                  context,
+                                final navigator = Navigator.of(context);
+                                await _stopCamera();
+                                if (!mounted) return;
+                                await navigator.push<void>(
                                   MaterialPageRoute(
                                     builder: (context) => Statistics(
                                       screenTimeProvider:

@@ -743,4 +743,182 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get monitoringProblem =>
       'Posture Guard needs attention. Open Settings and try again.';
+
+  @override
+  String get privacyNoticeTitle => 'Camera privacy';
+
+  @override
+  String get privacyNoticeBody =>
+      'Posture Guard can use your front camera to help check your posture while you use your phone.';
+
+  @override
+  String get privacyNoticeDetail =>
+      'Camera images are processed on your device only. They are not saved or uploaded. You can turn camera assistance off at any time and continue monitoring with your phone\'s angle sensors.';
+
+  @override
+  String get useSensorsOnly => 'Use sensors only';
+
+  @override
+  String get cameraAssistTitle => 'Use camera to help detect posture';
+
+  @override
+  String get cameraAssistSettingDescription =>
+      'Optional front-camera assistance while this app is visible. Sensor monitoring works without it.';
+
+  @override
+  String get cameraExplanationTitle => 'Camera assistance';
+
+  @override
+  String get cameraExplanationBody =>
+      'Posture Guard can use your front camera to help improve posture detection while the app is open.\n\nCamera images are processed on your device, are not saved, and are not uploaded.\n\nCamera access is optional. If you choose not to allow it, posture monitoring will continue using your phone\'s motion sensors.';
+
+  @override
+  String get notNow => 'Not now';
+
+  @override
+  String get cameraActiveIndicator =>
+      'Front camera active • Images are not saved';
+
+  @override
+  String get cameraAndPrivacy => 'Privacy & PDPA';
+
+  @override
+  String get privacyInformationBody =>
+      'The front camera may be used only as an optional posture signal while this app is visible and posture monitoring needs extra help. Images are processed on this device, discarded after analysis, and are never saved or uploaded. You can always use sensor-only monitoring.';
+
+  @override
+  String get privacyPageIntroduction =>
+      'Posture Guard is designed to monitor posture while giving you control over how your device data and camera are used.\n\nThe app primarily uses your phone\'s motion sensors to estimate posture. You may also choose to enable the front camera to help improve posture detection while the app is open.';
+
+  @override
+  String get privacyPageCameraUseTitle => 'Camera use';
+
+  @override
+  String get privacyPageCameraUseIntroduction =>
+      'The front camera is optional.\n\nIf camera assistance is enabled:';
+
+  @override
+  String get privacyPageCameraUseItems =>
+      'The front camera is used only to help estimate your posture.\nCamera images are processed directly on your device.\nCamera images are not saved.\nCamera images are not uploaded to Firebase or any external server.\nCamera images are discarded after processing.\nCamera assistance is used only while the app is active and the feature is needed.';
+
+  @override
+  String get privacyPageCameraUseClosing =>
+      'You can turn camera assistance off at any time. Posture Guard will continue monitoring posture using your phone\'s motion sensors.';
+
+  @override
+  String get privacyPageCameraPermissionTitle => 'Camera permission';
+
+  @override
+  String get privacyPageCameraPermissionBody =>
+      'Posture Guard will explain why camera access is needed before Android asks for camera permission.\n\nCamera access is optional.\n\nIf you deny camera permission, posture monitoring will continue using motion sensors.\n\nYou can also revoke camera permission later through your device settings.';
+
+  @override
+  String get privacyPageDataStoredTitle => 'Data we store';
+
+  @override
+  String get privacyPageDataStoredIntroduction =>
+      'Posture Guard may store information needed for the app to work, including:';
+
+  @override
+  String get privacyPageDataStoredItems =>
+      'App settings\nPosture calibration\nPosture statistics\nMonitoring history\nCoins\nOwned and equipped cosmetics\nApp progress\nCamera-assistance preferences';
+
+  @override
+  String get privacyPageDataStoredClosing =>
+      'Cloud data is stored under your anonymous Firebase account so that your data is separated from other users.\n\nPosture Guard does not require your name, email address, or password to create this anonymous account.';
+
+  @override
+  String get privacyPageFirebaseTitle => 'Firebase and cloud data';
+
+  @override
+  String get privacyPageFirebaseBody =>
+      'Posture Guard uses Firebase to store and synchronize selected app data.\n\nEach installation is assigned an anonymous Firebase user ID.\n\nYour Firebase user ID is used to keep your cloud data separate from other users.\n\nPosture Guard does not use this anonymous account to identify you by name.';
+
+  @override
+  String get privacyPageChoicesTitle => 'Your choices';
+
+  @override
+  String get privacyPageChoicesItems =>
+      'Use Posture Guard without the camera.\nTurn camera assistance on or off.\nDeny or revoke camera permission.\nContinue using sensor-based posture monitoring if camera access is unavailable.\nReview this privacy information at any time.\nDelete your Posture Guard data from Settings.';
+
+  @override
+  String get privacyPageDeleteTitle => 'Delete your data';
+
+  @override
+  String get privacyPageDeleteBody =>
+      'You can use \"Delete my data\" in Settings to remove your Posture Guard cloud data and anonymous Firebase account.\n\nThe app will ask you to confirm before deletion.\n\nIf deletion cannot be completed, Posture Guard will not falsely report that your data has been deleted.';
+
+  @override
+  String get privacyPageCameraIndicatorTitle => 'Camera indicator';
+
+  @override
+  String get privacyPageCameraIndicatorBody =>
+      'Whenever the front camera is actually active for posture assistance, Posture Guard displays an in-app camera activity indicator.\n\nThis lets you know when the camera is being used.';
+
+  @override
+  String get privacyPageConsentTitle => 'Consent and control';
+
+  @override
+  String get privacyPageConsentBody =>
+      'Camera assistance is optional and requires your permission.\n\nChoosing not to use the camera does not prevent you from using Posture Guard\'s main sensor-based posture monitoring.\n\nYou can change your choice at any time in Settings.';
+
+  @override
+  String get privacyPagePolicyTitle => 'Privacy policy';
+
+  @override
+  String get privacyPagePolicyBody =>
+      'This in-app page provides a summary of Posture Guard\'s privacy practices.\n\nA hosted Privacy Policy URL will also be provided for the Google Play Store before public release.';
+
+  @override
+  String get turnOffCameraAssistance => 'Turn off camera assistance';
+
+  @override
+  String get cameraAssistanceTurnedOff =>
+      'Camera assistance is off. Sensor monitoring continues.';
+
+  @override
+  String get openAppSettings => 'Open Settings';
+
+  @override
+  String get cameraPermissionNeedsSettings =>
+      'Camera access is blocked. Sensor monitoring continues. You can allow access in Android Settings.';
+
+  @override
+  String get deleteMyData => 'Delete my data';
+
+  @override
+  String get deleteMyDataDescription =>
+      'Delete your Posture Guard cloud data, anonymous identity, and user history stored on this device.';
+
+  @override
+  String get deleteDataConfirmTitle => 'Delete your data?';
+
+  @override
+  String get deleteDataConfirmBody =>
+      'This permanently deletes your cloud user data and anonymous Firebase identity, then clears your settings, calibration, posture history, coins, and cosmetics from this device. Language and Android permission choices are preserved.';
+
+  @override
+  String get deleteDataAction => 'Delete data';
+
+  @override
+  String get deletingData => 'Deleting data…';
+
+  @override
+  String get deleteDataSuccess => 'Your Posture Guard data was deleted.';
+
+  @override
+  String get deleteDataCloudFailed =>
+      'Cloud data could not be deleted. Nothing was reported as complete. Check your connection and retry.';
+
+  @override
+  String get deleteDataAuthFailed =>
+      'Cloud data was deleted, but the anonymous identity could not be removed. Retry to finish deletion.';
+
+  @override
+  String get deleteDataLocalFailed =>
+      'Cloud data and identity were deleted, but local cleanup did not finish. Retry to complete it.';
+
+  @override
+  String get deleteDataNoUser =>
+      'A secure user session could not be found. Check your connection and retry.';
 }

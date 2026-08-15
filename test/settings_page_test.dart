@@ -7,10 +7,14 @@ import 'package:postureguard/models/app_settings.dart';
 import 'package:postureguard/models/calibration.dart';
 import 'package:postureguard/pages/settings_page.dart';
 import 'package:postureguard/services/alert_mute_service.dart';
+import 'package:postureguard/services/camera_privacy_service.dart';
 import 'package:postureguard/services/device_screen_time_service.dart';
 import 'package:postureguard/services/monitoring_service.dart';
 import 'package:postureguard/services/preferences_service.dart';
 import 'package:postureguard/widgets/no_stretch_scroll_behavior.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 class _FakeSettingsStore implements SettingsStore {
   _FakeSettingsStore(
@@ -91,6 +95,8 @@ Widget _settingsApp(
   Locale locale = const Locale('en'),
   Future<NotificationPermission> Function()? loadNotificationPermission,
   Future<NotificationPermission> Function()? requestNotificationPermission,
+  CameraAssistPermissionCoordinator? cameraCoordinator,
+  Future<void> Function(bool enabled)? onCameraAssistChanged,
 }) {
   return MaterialApp(
     locale: locale,
@@ -117,8 +123,37 @@ Widget _settingsApp(
       showGuidedTour: showGuidedTour,
       loadNotificationPermission: loadNotificationPermission,
       requestNotificationPermission: requestNotificationPermission,
+      cameraCoordinator: cameraCoordinator,
+      onCameraAssistChanged: onCameraAssistChanged,
     ),
   );
+}
+
+class _FakeCameraPermissionGateway implements CameraPermissionGateway {
+  _FakeCameraPermissionGateway({
+    this.requestResult = CameraPermissionState.denied,
+  });
+
+  CameraPermissionState current = CameraPermissionState.denied;
+  CameraPermissionState requestResult;
+  int requestCalls = 0;
+  int openSettingsCalls = 0;
+
+  @override
+  Future<bool> openSettings() async {
+    openSettingsCalls++;
+    return true;
+  }
+
+  @override
+  Future<CameraPermissionState> request() async {
+    requestCalls++;
+    current = requestResult;
+    return current;
+  }
+
+  @override
+  Future<CameraPermissionState> status() async => current;
 }
 
 Future<void> _bringIntoView(WidgetTester tester, Finder finder) async {
@@ -135,6 +170,11 @@ Future<void> _bringIntoView(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+  });
+
   testWidgets('hides calibration angles and updates status immediately', (
     tester,
   ) async {
@@ -166,6 +206,189 @@ void main() {
 
     expect(find.text('Position saved'), findsWidgets);
     expect(find.textContaining('threshold'), findsNothing);
+  });
+
+  testWidgets(
+    'camera explanation precedes permission and denial keeps sensor monitoring',
+    (tester) async {
+      final gateway = _FakeCameraPermissionGateway();
+      final coordinator = CameraAssistPermissionCoordinator(
+        preferences: CameraPrivacyPreferences(
+          preferences: SharedPreferencesAsync(),
+        ),
+        permissionGateway: gateway,
+        sharedPreferences: SharedPreferencesAsync(),
+      );
+      final changes = <bool>[];
+      await tester.pumpWidget(
+        _settingsApp(
+          _FakeSettingsStore(AppSettings.defaults),
+          loadMonitoringState: () async => true,
+          cameraCoordinator: coordinator,
+          onCameraAssistChanged: (enabled) async => changes.add(enabled),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _bringIntoView(
+        tester,
+        find.byKey(const Key('cameraAssistEnabledSwitch')),
+      );
+      await tester.tap(find.byKey(const Key('cameraAssistEnabledSwitch')));
+      await tester.pumpAndSettle();
+      expect(find.text('Camera assistance'), findsOneWidget);
+      expect(
+        find.text(
+          'Posture Guard can use your front camera to help improve posture '
+          'detection while the app is open.\n\nCamera images are processed '
+          'on your device, are not saved, and are not uploaded.\n\nCamera '
+          'access is optional. If you choose not to allow it, posture '
+          "monitoring will continue using your phone's motion sensors.",
+        ),
+        findsOneWidget,
+      );
+      expect(gateway.requestCalls, 0);
+
+      await tester.tap(find.byKey(const Key('cameraExplanationNotNowButton')));
+      await tester.pumpAndSettle();
+      expect(gateway.requestCalls, 0);
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const Key('cameraAssistEnabledSwitch')),
+            )
+            .value,
+        isFalse,
+      );
+
+      await tester.tap(find.byKey(const Key('cameraAssistEnabledSwitch')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('cameraExplanationContinueButton')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(gateway.requestCalls, 1);
+      expect(changes, [false]);
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const Key('monitoringEnabledSwitch')),
+            )
+            .value,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.byKey(const Key('cameraAssistEnabledSwitch')),
+            )
+            .value,
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('camera grant enables the local feature preference', (
+    tester,
+  ) async {
+    final gateway = _FakeCameraPermissionGateway(
+      requestResult: CameraPermissionState.granted,
+    );
+    final preferences = CameraPrivacyPreferences(
+      preferences: SharedPreferencesAsync(),
+    );
+    final coordinator = CameraAssistPermissionCoordinator(
+      preferences: preferences,
+      permissionGateway: gateway,
+      sharedPreferences: SharedPreferencesAsync(),
+    );
+    await tester.pumpWidget(
+      _settingsApp(
+        _FakeSettingsStore(AppSettings.defaults),
+        cameraCoordinator: coordinator,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _bringIntoView(
+      tester,
+      find.byKey(const Key('cameraAssistEnabledSwitch')),
+    );
+    await tester.tap(find.byKey(const Key('cameraAssistEnabledSwitch')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('cameraExplanationContinueButton')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.requestCalls, 1);
+    expect(await preferences.isCameraAssistEnabled(), isTrue);
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const Key('cameraAssistEnabledSwitch')),
+          )
+          .value,
+      isTrue,
+    );
+  });
+
+  testWidgets('Settings opens the complete English Privacy & PDPA page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _settingsApp(_FakeSettingsStore(AppSettings.defaults)),
+    );
+    await tester.pumpAndSettle();
+
+    final privacyTile = find.byKey(const Key('cameraPrivacySettingsTile'));
+    await _bringIntoView(tester, privacyTile);
+    expect(find.text('Privacy & PDPA'), findsOneWidget);
+
+    await tester.tap(privacyTile);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Privacy & PDPA'), findsOneWidget);
+    expect(find.text('Camera use'), findsOneWidget);
+    expect(find.text('Camera permission'), findsOneWidget);
+    expect(find.text('Data we store'), findsOneWidget);
+    expect(find.text('Firebase and cloud data'), findsOneWidget);
+    expect(find.text('Your choices'), findsOneWidget);
+    expect(find.text('Delete your data'), findsOneWidget);
+    expect(find.text('Camera indicator'), findsOneWidget);
+    expect(find.text('Consent and control'), findsOneWidget);
+    expect(find.text('Privacy policy'), findsOneWidget);
+    expect(
+      find.byKey(const Key('turnOffCameraAssistanceButton')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('deleteMyDataButton')), findsOneWidget);
+    expect(find.textContaining('PDPA compliant'), findsNothing);
+    expect(find.textContaining('legally compliant'), findsNothing);
+  });
+
+  testWidgets('Thai Settings exposes ความเป็นส่วนตัวและ PDPA', (tester) async {
+    await tester.pumpWidget(
+      _settingsApp(
+        _FakeSettingsStore(AppSettings.defaults),
+        locale: const Locale('th'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final privacyTile = find.byKey(const Key('cameraPrivacySettingsTile'));
+    await _bringIntoView(tester, privacyTile);
+    expect(find.text('ความเป็นส่วนตัวและ PDPA'), findsOneWidget);
+
+    await tester.tap(privacyTile);
+    await tester.pumpAndSettle();
+
+    expect(find.text('ความเป็นส่วนตัวและ PDPA'), findsOneWidget);
+    expect(find.text('การใช้กล้อง'), findsOneWidget);
+    expect(find.text('ข้อมูลที่จัดเก็บ'), findsOneWidget);
+    expect(find.text('การลบข้อมูล'), findsOneWidget);
+    expect(find.text('นโยบายความเป็นส่วนตัว'), findsOneWidget);
+    expect(find.byKey(const Key('deleteMyDataButton')), findsOneWidget);
   });
 
   testWidgets(

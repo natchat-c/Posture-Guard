@@ -32,6 +32,12 @@ class _FakeAuthClient implements AuthClient {
     user = result;
     return result;
   }
+
+  @override
+  Future<void> deleteCurrentUser() async {
+    if (user == null) throw StateError('No fake user to delete.');
+    user = null;
+  }
 }
 
 void main() {

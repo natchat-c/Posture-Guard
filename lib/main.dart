@@ -9,9 +9,11 @@ import 'l10n/app_localizations.dart';
 import 'l10n/locale_controller.dart';
 import 'pages/home_page.dart';
 import 'pages/language_selection_page.dart';
+import 'pages/privacy_notice_page.dart';
 import 'pages/tutorial_page.dart';
 import 'services/app_startup_coordinator.dart';
 import 'services/auth_service.dart';
+import 'services/camera_privacy_service.dart';
 import 'services/monitoring_service.dart';
 import 'services/preferences_service.dart';
 import 'widgets/no_stretch_scroll_behavior.dart';
@@ -71,12 +73,16 @@ class MyApp extends StatefulWidget {
     this.startupCoordinator,
     this.initialLanguageCode,
     this.languagePreferences,
+    this.cameraPrivacyPreferences,
+    @visibleForTesting this.homeBuilder,
   });
 
   final bool? initialTutorialCompleted;
   final AppStartupCoordinator? startupCoordinator;
   final String? initialLanguageCode;
   final LanguagePreferences? languagePreferences;
+  final CameraPrivacyPreferences? cameraPrivacyPreferences;
+  final Widget Function(bool showTourOnStart)? homeBuilder;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -134,6 +140,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   startupCoordinator: widget.startupCoordinator,
                   selectedLanguageCode: _localeController.selectedLanguageCode,
                   onLanguageSelected: _localeController.selectLanguage,
+                  cameraPrivacyPreferences: widget.cameraPrivacyPreferences,
+                  homeBuilder: widget.homeBuilder,
                 ),
         ),
       ),
@@ -147,12 +155,16 @@ class _TutorialGate extends StatefulWidget {
     this.startupCoordinator,
     required this.selectedLanguageCode,
     required this.onLanguageSelected,
+    this.cameraPrivacyPreferences,
+    this.homeBuilder,
   });
 
   final bool? initialTutorialCompleted;
   final AppStartupCoordinator? startupCoordinator;
   final String? selectedLanguageCode;
   final Future<void> Function(String code) onLanguageSelected;
+  final CameraPrivacyPreferences? cameraPrivacyPreferences;
+  final Widget Function(bool showTourOnStart)? homeBuilder;
 
   @override
   State<_TutorialGate> createState() => _TutorialGateState();
@@ -161,6 +173,7 @@ class _TutorialGate extends StatefulWidget {
 class _TutorialGateState extends State<_TutorialGate> {
   AppStartupCoordinator? _coordinator;
   bool? _hasCompletedTutorial;
+  bool? _privacyNoticeAcknowledged;
   bool _showInitialHomeTour = false;
 
   AppStartupCoordinator get _startupCoordinator {
@@ -173,9 +186,11 @@ class _TutorialGateState extends State<_TutorialGate> {
     super.initState();
     if (widget.initialTutorialCompleted case final value?) {
       if (value) {
+        _privacyNoticeAcknowledged = true;
         _restoreMonitoring();
       } else {
         _hasCompletedTutorial = false;
+        _loadPrivacyState();
       }
     } else {
       _loadTutorialState();
@@ -186,14 +201,44 @@ class _TutorialGateState extends State<_TutorialGate> {
     try {
       final completed = await _startupCoordinator.hasCompletedTutorial();
       if (!completed) {
-        if (mounted) setState(() => _hasCompletedTutorial = false);
+        final acknowledged = await _privacyPreferences.isNoticeAcknowledged();
+        if (mounted) {
+          setState(() {
+            _hasCompletedTutorial = false;
+            _privacyNoticeAcknowledged = acknowledged;
+          });
+        }
         return;
       }
+      _privacyNoticeAcknowledged = true;
       await _restoreMonitoring();
     } catch (error) {
       debugPrint('Could not load tutorial state: $error');
       if (mounted) setState(() => _hasCompletedTutorial = false);
     }
+  }
+
+  CameraPrivacyPreferences get _privacyPreferences {
+    return widget.cameraPrivacyPreferences ?? CameraPrivacyPreferences();
+  }
+
+  Future<void> _loadPrivacyState() async {
+    try {
+      final acknowledged = await _privacyPreferences.isNoticeAcknowledged();
+      if (mounted) {
+        setState(() => _privacyNoticeAcknowledged = acknowledged);
+      }
+    } catch (error) {
+      debugPrint('Could not load camera privacy state: $error');
+      if (mounted) setState(() => _privacyNoticeAcknowledged = false);
+    }
+  }
+
+  Future<void> _completePrivacyNotice(PrivacyNoticeChoice choice) async {
+    await _privacyPreferences.acknowledgeNotice(
+      useSensorsOnly: choice == PrivacyNoticeChoice.sensorsOnly,
+    );
+    if (mounted) setState(() => _privacyNoticeAcknowledged = true);
   }
 
   Future<void> _restoreMonitoring() async {
@@ -252,8 +297,16 @@ class _TutorialGateState extends State<_TutorialGate> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (!completed) {
+      final privacyAcknowledged = _privacyNoticeAcknowledged;
+      if (privacyAcknowledged == null) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      if (!privacyAcknowledged) {
+        return PrivacyNoticePage(onChoice: _completePrivacyNotice);
+      }
       return TutorialPage(onCompleted: _completeTutorial);
     }
-    return MyHomePage(showTourOnStart: _showInitialHomeTour);
+    return widget.homeBuilder?.call(_showInitialHomeTour) ??
+        MyHomePage(showTourOnStart: _showInitialHomeTour);
   }
 }
