@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter/services.dart';
 
 import 'firebase_options.dart';
 import 'l10n/app_localizations.dart';
@@ -15,18 +18,29 @@ import 'widgets/no_stretch_scroll_behavior.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await configurePreferredOrientations();
   FlutterForegroundTask.initCommunicationPort();
   MonitoringService.initialize();
 
+  runApp(const MyApp());
+  unawaited(_initializeCloud());
+}
+
+@visibleForTesting
+Future<void> configurePreferredOrientations() {
+  return SystemChrome.setPreferredOrientations(const [
+    DeviceOrientation.portraitUp,
+  ]);
+}
+
+Future<void> _initializeCloud() async {
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-  } catch (e) {
-    debugPrint('Firebase initialization skipped or failed: $e');
+  } catch (error) {
+    debugPrint('Firebase initialization skipped or failed: $error');
   }
-
-  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {

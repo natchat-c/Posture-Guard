@@ -148,6 +148,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your daily posture score earns coins. Use them to customize your character.';
 
   @override
+  String get guideCosmeticsTitle => 'Collect cosmetics';
+
+  @override
+  String get guideCosmeticsBody =>
+      'Use your coins to collect cosmetics for your slime. Tap Customize to see what you own.';
+
+  @override
   String get guideHelpTitle => 'Need help again?';
 
   @override
@@ -204,10 +211,119 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shop => 'Shop';
 
   @override
-  String get buy => 'Buy';
+  String get buyMore => 'Buy more';
 
   @override
-  String get buyMore => 'Buy more';
+  String get hats => 'Hats';
+
+  @override
+  String get eyewear => 'Eyewear';
+
+  @override
+  String get holding => 'Holding';
+
+  @override
+  String get backAccessories => 'Back';
+
+  @override
+  String get none => 'None';
+
+  @override
+  String get customizeTourTitle => 'Equip your cosmetics';
+
+  @override
+  String get customizeTourBody =>
+      'Equip the cosmetics you\'ve collected here. Choose from Hats, Eyewear, Holding, and Back.';
+
+  @override
+  String get customizeShopTourTitle => 'Collect more cosmetics';
+
+  @override
+  String get customizeShopTourBody => 'Tap Buy more to open the Shop.';
+
+  @override
+  String get shopTourTitle => 'Unlock cosmetics';
+
+  @override
+  String get shopTourBody =>
+      'Spend coins on boxes to unlock new cosmetics. Higher-cost boxes have better odds for rare items. Tap ? to see each box\'s drop rates.';
+
+  @override
+  String get standardBox => 'Standard Box';
+
+  @override
+  String get premiumBox => 'Premium Box';
+
+  @override
+  String get open => 'Open';
+
+  @override
+  String get odds => 'Odds';
+
+  @override
+  String boxCost(int count) {
+    return 'Cost: $count coins';
+  }
+
+  @override
+  String get dropRates => 'Drop rates';
+
+  @override
+  String get duplicatesConvertedInfo => 'Duplicates are converted into coins.';
+
+  @override
+  String get duplicateRewards => 'Duplicate rewards';
+
+  @override
+  String get collection => 'Collection';
+
+  @override
+  String get owned => 'Owned';
+
+  @override
+  String get locked => 'Locked';
+
+  @override
+  String get starter => 'Starter';
+
+  @override
+  String get newCosmetic => 'New cosmetic!';
+
+  @override
+  String get gachaRewardNew => 'NEW!';
+
+  @override
+  String get duplicate => 'Duplicate';
+
+  @override
+  String get unlocked => 'Unlocked';
+
+  @override
+  String get notEnoughCoins => 'Not enough coins';
+
+  @override
+  String convertedToCoins(int coins) {
+    return 'Converted to +$coins coins';
+  }
+
+  @override
+  String coinCount(int count) {
+    return '$count coins';
+  }
+
+  @override
+  String coinsBalance(int coins) {
+    return 'Coins: $coins';
+  }
+
+  @override
+  String get gachaOpenFailed => 'Could not open this box. Please try again.';
+
+  @override
+  String get ok => 'OK';
+
+  @override
+  String get continueLabel => 'Continue';
 
   @override
   String get status => 'Status';
@@ -263,13 +379,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get cameraUnavailable =>
       'The camera is unavailable. Posture monitoring will continue.';
-
-  @override
-  String get cameraChecking => 'Checking your position…';
-
-  @override
-  String get cameraFaceNotFound =>
-      'Move into view if you want camera help. Posture monitoring is still working.';
 
   @override
   String get postureSetupNeeded =>
@@ -472,6 +581,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pastSevenDays => 'Past 7 Days';
 
   @override
+  String get sevenDaySummary => '7-Day Summary';
+
+  @override
   String get allTime => 'All Time';
 
   @override
@@ -485,6 +597,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get postureScore => 'Posture score';
+
+  @override
+  String get scoreExcellent => 'Excellent';
+
+  @override
+  String get scoreGood => 'Good';
+
+  @override
+  String get scoreFair => 'Fair';
+
+  @override
+  String get scoreNeedsAttention => 'Needs attention';
+
+  @override
+  String get todayNoPostureData => 'No posture data yet today';
 
   @override
   String get alertsSent => 'Reminders sent';
@@ -527,17 +654,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'No posture history yet. Your statistics will appear after monitoring begins.';
 
   @override
+  String get statisticsEmptyTitle => 'No posture data yet';
+
+  @override
+  String get statisticsEmptyBody =>
+      'Use Posture Guard and your statistics will appear here.';
+
+  @override
   String trendImprovement(String points) {
-    return 'Your score improved by $points points';
+    return '$points percentage points higher than previous 7 days';
   }
 
   @override
   String trendDecline(String points) {
-    return 'Your score went down by $points points';
+    return '$points percentage points lower than previous 7 days';
   }
 
   @override
-  String get trendUnchanged => 'Your score is about the same';
+  String get trendUnchanged => 'No meaningful change from previous 7 days';
+
+  @override
+  String get notEnoughPreviousData => 'Not enough previous data for comparison';
 
   @override
   String get weekdayMon => 'Mon';

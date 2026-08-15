@@ -88,6 +88,20 @@ class AllTimeStatistics {
   final BestRecordedDay? bestDay;
 }
 
+class DailyScorePoint {
+  const DailyScorePoint({
+    required this.date,
+    required this.score,
+    required this.isToday,
+  });
+
+  final DateTime date;
+  final double? score;
+  final bool isToday;
+
+  bool get hasData => score != null;
+}
+
 enum ScoreTrend { improvement, decline, unchanged, insufficientData }
 
 class StatisticsSummary {
@@ -159,6 +173,24 @@ class StatisticsSummary {
           return stats == null || !stats.hasTrackedPosture
               ? 0.0
               : stats.dailyScore;
+        })
+        .toList(growable: false);
+  }
+
+  List<DailyScorePoint> scorePointsForPastSevenDays(
+    Map<String, DailyStats> records,
+  ) {
+    final today = pastSevenDays.last;
+    return pastSevenDays
+        .map((day) {
+          final stats = records[postureDateKey(day)];
+          return DailyScorePoint(
+            date: day,
+            score: stats == null || !stats.hasTrackedPosture
+                ? null
+                : stats.dailyScore.clamp(0, 100).toDouble(),
+            isToday: day == today,
+          );
         })
         .toList(growable: false);
   }

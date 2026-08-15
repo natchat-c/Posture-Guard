@@ -175,12 +175,14 @@ class _TutorialPageState extends State<TutorialPage> {
                     icon: Icons.sentiment_satisfied_alt_rounded,
                     text: l10n.goodPostureExplanation,
                   ),
+                  const Divider(height: 12),
                   _PostureStateCard(
                     key: const Key('tutorialWarningState'),
                     color: Colors.orange,
                     icon: Icons.warning_amber_rounded,
                     text: l10n.warningPostureExplanation,
                   ),
+                  const Divider(height: 12),
                   _PostureStateCard(
                     key: const Key('tutorialBadState'),
                     color: Colors.red,
@@ -335,17 +337,14 @@ class _PostureStateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: color.withValues(alpha: 0.1),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 30),
-            const SizedBox(width: 12),
-            Expanded(child: Text(text)),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 30),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text)),
+        ],
       ),
     );
   }

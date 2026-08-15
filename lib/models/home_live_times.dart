@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import '../services/statistics_repository.dart';
 
@@ -20,15 +21,21 @@ class HomeLiveTimes {
   }
 
   void reconcile(DailyStats stats) {
-    monitoredSeconds = stats.monitoredTimeSeconds;
-    badPostureSeconds = stats.badPostureSeconds;
+    monitoredSeconds = max(monitoredSeconds, stats.monitoredTimeSeconds);
+    badPostureSeconds = max(badPostureSeconds, stats.badPostureSeconds);
     if (stats.deviceScreenTimeSeconds != null) {
-      deviceScreenTimeSeconds = stats.deviceScreenTimeSeconds;
+      deviceScreenTimeSeconds = max(
+        deviceScreenTimeSeconds ?? 0,
+        stats.deviceScreenTimeSeconds!,
+      );
     }
   }
 
   void reconcileDeviceScreenTime(int seconds) {
-    deviceScreenTimeSeconds = seconds < 0 ? 0 : seconds;
+    deviceScreenTimeSeconds = max(
+      deviceScreenTimeSeconds ?? 0,
+      max(0, seconds),
+    );
   }
 
   bool advance({

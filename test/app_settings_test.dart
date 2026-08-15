@@ -15,6 +15,7 @@ void main() {
     test('new users enable monitoring and alerts by default', () {
       expect(AppSettings.defaults.monitoringEnabled, isTrue);
       expect(AppSettings.defaults.alertsEnabled, isTrue);
+      expect(AppSettings.defaults.alertDelaySeconds, 10);
       expect(AppSettings.defaults.alertFrequencySeconds, 30);
     });
 

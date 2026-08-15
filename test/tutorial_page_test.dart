@@ -45,6 +45,16 @@ void main() {
     expect(find.byKey(const Key('tutorialGoodState')), findsOneWidget);
     expect(find.byKey(const Key('tutorialWarningState')), findsOneWidget);
     expect(find.byKey(const Key('tutorialBadState')), findsOneWidget);
+    for (final key in const [
+      Key('tutorialGoodState'),
+      Key('tutorialWarningState'),
+      Key('tutorialBadState'),
+    ]) {
+      expect(
+        find.descendant(of: find.byKey(key), matching: find.byType(Card)),
+        findsNothing,
+      );
+    }
     expect(
       find.text('Good — your phone position looks comfortable.'),
       findsOneWidget,

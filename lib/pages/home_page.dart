@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:camera/camera.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
@@ -14,14 +13,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../functions/posture_check.dart';
 import '../l10n/locale_controller.dart';
 import '../models/calibration.dart';
+import '../models/cosmetics.dart';
 import '../models/home_live_times.dart';
 import '../models/posture_thresholds.dart';
+import '../services/cosmetic_repository.dart';
 import '../services/device_screen_time_service.dart';
+import '../services/coin_repository.dart';
 import '../services/monitoring_service.dart';
 import '../services/preferences_service.dart';
 import '../services/statistics_repository.dart';
 import '../widgets/coach_mark_overlay.dart';
 import '../widgets/responsive_layout.dart';
+import '../widgets/slime_character.dart';
 import 'customize_page.dart';
 import 'settings_page.dart';
 import 'statistics_page.dart';
@@ -35,6 +38,9 @@ class MyHomePage extends StatefulWidget {
     @visibleForTesting this.screenTimeProvider,
     @visibleForTesting this.initialPostureStatus = 'GOOD',
     @visibleForTesting this.initialMonitoringActive = true,
+    @visibleForTesting this.initialCoinBalance = 0,
+    @visibleForTesting this.cosmeticStore,
+    @visibleForTesting this.initialCosmetics = CosmeticSelection.none,
   });
 
   final bool showTourOnStart;
@@ -43,6 +49,9 @@ class MyHomePage extends StatefulWidget {
   final DeviceScreenTimeProvider? screenTimeProvider;
   final String initialPostureStatus;
   final bool initialMonitoringActive;
+  final int initialCoinBalance;
+  final CosmeticStore? cosmeticStore;
+  final CosmeticSelection initialCosmetics;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -55,6 +64,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   late final SettingsStore _settingsRepository;
   final CalibrationRepository _calibrationRepository = CalibrationRepository();
   late final StatisticsRepository _statisticsRepository;
+  final CoinRepository _coinRepository = CoinRepository();
+  late final CosmeticStore _cosmeticRepository;
   final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
   final CameraFrameStability _cameraFrameStability = CameraFrameStability();
   late final DeviceScreenTimeProvider _deviceScreenTimeProvider;
@@ -63,6 +74,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   final GlobalKey _settingsTourKey = GlobalKey();
   final GlobalKey _statusTourKey = GlobalKey();
   final GlobalKey _coinTourKey = GlobalKey();
+  final GlobalKey _customizeTourKey = GlobalKey();
   late final HomeLiveTimes _liveTimes;
 
   StreamSubscription<DailyStats>? _statsSubscription;
@@ -87,8 +99,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   int? _lastSavedDeviceScreenTime;
 
   int _totalCoins = 0;
-  int _coinsEarnedToday = 0;
-  String? _lastAwardedDate;
+  CosmeticSelection _cosmetics = CosmeticSelection.none;
 
   CameraController? _cameraController;
   FaceDetector? _faceDetector;
@@ -118,6 +129,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _totalCoins = max(0, widget.initialCoinBalance);
+    _cosmetics = widget.initialCosmetics;
+    _cosmeticRepository = widget.cosmeticStore ?? CosmeticRepository();
     _settingsRepository = widget.settingsStore ?? SettingsRepository();
     _deviceScreenTimeProvider =
         widget.screenTimeProvider ?? const AndroidDeviceScreenTimeProvider();
@@ -127,12 +141,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (widget.showTourOnStart) _tourStep = 1;
     WidgetsBinding.instance.addObserver(this);
     _liveTimes = HomeLiveTimes(dateKey: _activeDateKey);
+    _statisticsRepository = StatisticsRepository();
     if (widget.testMode) {
       _initializing = false;
       _monitoringActive = widget.initialMonitoringActive;
+      if (widget.cosmeticStore != null) {
+        unawaited(_loadCosmeticsForTesting());
+      }
       return;
     }
-    _statisticsRepository = StatisticsRepository();
     FlutterForegroundTask.addTaskDataCallback(_onServiceData);
     _subscribeToTodayStats();
     _initialize();
@@ -150,6 +167,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   Future<void> _initialize() async {
     final settingsResult = await _settingsRepository.load();
     final calibrationResult = await _calibrationRepository.load();
+    final cosmetics = await _loadCosmeticSelection();
     await _loadCoinsAndAwardCompletedDays();
     await _refreshCameraPermissionStatus();
     await _refreshDeviceScreenTime();
@@ -158,6 +176,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     setState(() {
       _calibration = calibrationResult.calibration;
+      _cosmetics = cosmetics;
       _monitoringActive = running;
       _initializing = false;
     });
@@ -171,6 +190,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       MonitoringService.requestState();
       await _manageCamera();
     }
+  }
+
+  Future<void> _loadCosmeticsForTesting() async {
+    final cosmetics = await _loadCosmeticSelection();
+    if (!mounted) return;
+    setState(() => _cosmetics = cosmetics);
   }
 
   void _subscribeToTodayStats() {
@@ -257,9 +282,29 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   Future<void> _refreshPresentationSources() async {
     final today = postureDateKey();
     if (today != _activeDateKey) _subscribeToTodayStats();
+    final settingsResult = await _settingsRepository.load();
+    final cosmetics = await _loadCosmeticSelection();
+    await _loadCoinsAndAwardCompletedDays();
+    if (mounted && cosmetics != _cosmetics) {
+      setState(() => _cosmetics = cosmetics);
+    }
+    MonitoringService.updateSettings(settingsResult.settings);
+    unawaited(_calibrationRepository.load());
+    unawaited(_statisticsRepository.synchronize());
+    unawaited(_coinRepository.synchronize());
+    MonitoringService.requestStatisticsSync();
     await _refreshServiceState();
     MonitoringService.requestState();
     await _refreshDeviceScreenTime();
+  }
+
+  Future<CosmeticSelection> _loadCosmeticSelection() async {
+    try {
+      return await _cosmeticRepository.load();
+    } catch (error) {
+      debugPrint('Cosmetic loading failed: $error');
+      return _cosmetics;
+    }
   }
 
   Future<void> _refreshServiceState() async {
@@ -567,6 +612,32 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _openCustomize() async {
+    final guided = _tourStep == 3;
+    if (guided) setState(() => _tourStep = null);
+    final tourResult = await Navigator.push<CustomizeTourResult>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Customizes(
+          cosmeticStore: _cosmeticRepository,
+          coinStore: _coinRepository,
+          showGuidedTour: guided,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _refreshPresentationSources();
+    if (!mounted || !guided) return;
+    setState(() {
+      _preparedTourStep = null;
+      _tourStep = switch (tourResult) {
+        CustomizeTourResult.completed => 4,
+        CustomizeTourResult.skipped => null,
+        CustomizeTourResult.back || null => 3,
+      };
+    });
+  }
+
   Future<bool> _loadMonitoringStateForSettings() async {
     await _refreshServiceState();
     return _monitoringActive;
@@ -767,10 +838,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       final faces = await detector.processImage(inputImage);
       if (!mounted || !_cameraActive) return;
       if (faces.isEmpty) {
-        _markCameraUnavailable(
-          context.l10n.cameraFaceNotFound,
-          disableRetry: false,
-        );
+        _clearCameraData();
+        MonitoringService.updateCameraSupplement(available: false);
         return;
       }
 
@@ -789,7 +858,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       );
 
       if (!_cameraDataReliable) {
-        setState(() => _cameraStatusMessage = context.l10n.cameraChecking);
         MonitoringService.updateCameraSupplement(available: false);
         return;
       }
@@ -848,81 +916,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _loadCoinsAndAwardCompletedDays() async {
-    final coinsRef = FirebaseDatabase.instance.ref('users/demo_user/coins');
     try {
-      final snapshot = await coinsRef.get();
-      if (!snapshot.exists || snapshot.value == null) {
-        _totalCoins = 0;
-        _coinsEarnedToday = 0;
-        _lastAwardedDate = postureDateKey(
-          DateTime.now().subtract(const Duration(days: 1)),
-        );
-        await _saveCoins();
-      } else {
-        final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
-        _totalCoins = (data['totalCoins'] as num?)?.toInt() ?? 0;
-        _coinsEarnedToday = 0;
-        _lastAwardedDate =
-            data['lastAwardedDate'] as String? ??
-            postureDateKey(DateTime.now().subtract(const Duration(days: 1)));
-      }
-      await _awardCoinsForCompletedDays();
+      final state = await _coinRepository.load();
+      final records = await _statisticsRepository.loadAll();
+      final updated = await _coinRepository.awardCompletedDays(
+        state: state,
+        records: records,
+      );
+      _totalCoins = updated.totalCoins;
       if (mounted) setState(() {});
     } catch (error) {
       debugPrint('Coin loading failed: $error');
-    }
-  }
-
-  Future<void> _awardCoinsForCompletedDays() async {
-    final today = DateTime.parse(postureDateKey());
-    final fallback = today.subtract(const Duration(days: 1));
-    DateTime lastAwarded;
-    try {
-      lastAwarded = DateTime.parse(_lastAwardedDate ?? '');
-    } catch (_) {
-      lastAwarded = fallback;
-    }
-
-    var date = lastAwarded.add(const Duration(days: 1));
-    while (date.isBefore(today)) {
-      final dateKey = postureDateKey(date);
-      final ref = FirebaseDatabase.instance.ref(
-        'users/demo_user/daily_stats/$dateKey',
-      );
-      final snapshot = await ref.get();
-      if (snapshot.exists && snapshot.value != null) {
-        final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
-        final alreadyAwarded = data['coinsAwarded'] as bool? ?? false;
-        if (!alreadyAwarded) {
-          final score =
-              ((data['score'] as num?)?.toInt() ??
-                      (data['scorePercent'] as num?)?.toInt() ??
-                      0)
-                  .clamp(0, 100);
-          _totalCoins = max(0, _totalCoins + score);
-          await ref.update({
-            'coinsEarned': score,
-            'coinsAwarded': true,
-            'coinsAwardedAt': ServerValue.timestamp,
-          });
-        }
-      }
-      _lastAwardedDate = dateKey;
-      date = date.add(const Duration(days: 1));
-    }
-    await _saveCoins();
-  }
-
-  Future<void> _saveCoins() async {
-    try {
-      await FirebaseDatabase.instance.ref('users/demo_user/coins').set({
-        'totalCoins': _totalCoins,
-        'coinsEarnedToday': _coinsEarnedToday,
-        'lastAwardedDate': _lastAwardedDate,
-        'updatedAt': ServerValue.timestamp,
-      });
-    } catch (error) {
-      debugPrint('Coin saving failed: $error');
     }
   }
 
@@ -945,7 +949,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       0 => _statusTourKey,
       1 => _settingsTourKey,
       2 => _coinTourKey,
-      3 => _helpTourKey,
+      3 => _customizeTourKey,
+      4 => _helpTourKey,
       _ => null,
     };
   }
@@ -973,7 +978,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (current == null) return;
     final next = current + delta;
     if (next < 0) return;
-    if (next > 4) {
+    if (next > 5) {
       setState(() => _tourStep = null);
       return;
     }
@@ -1020,6 +1025,23 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     };
   }
 
+  SlimeExpression get _slimeExpression {
+    if (!_monitoringActive) return SlimeExpression.neutral;
+    return switch (_postureStatus) {
+      'GOOD' => SlimeExpression.happy,
+      'WARNING' => SlimeExpression.sad,
+      _ => SlimeExpression.verySad,
+    };
+  }
+
+  String _formattedCoinBalance() {
+    if (_totalCoins < 10000) return '$_totalCoins';
+    final thousands = _totalCoins / 1000;
+    return thousands >= 99.95
+        ? '${thousands.round()}K'
+        : '${thousands.toStringAsFixed(1)}K';
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -1053,7 +1075,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       0 => (l10n.guidePostureTitle, l10n.guidePostureBody),
       1 => (l10n.guideSettingsTitle, l10n.guideSettingsBody),
       2 => (l10n.guideCoinsTitle, l10n.guideCoinsBody),
-      3 => (l10n.guideHelpTitle, l10n.guideHelpBody),
+      3 => (l10n.guideCosmeticsTitle, l10n.guideCosmeticsBody),
+      4 => (l10n.guideHelpTitle, l10n.guideHelpBody),
       _ => (l10n.guideFinishTitle, l10n.guideFinishBody),
     };
 
@@ -1133,7 +1156,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                               icon: const Icon(Icons.monetization_on_rounded),
                               label: FittedBox(
                                 fit: BoxFit.scaleDown,
-                                child: Text('$_totalCoins'),
+                                child: Text(
+                                  _formattedCoinBalance(),
+                                  key: const Key('homeCoinBalanceText'),
+                                  style: TextStyle(
+                                    fontSize: constraints.isVerySmallPhone
+                                        ? 20
+                                        : 22,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -1148,7 +1180,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                             heroTag: 'homeHelpButton',
                             tooltip: l10n.helpTooltip,
                             onPressed: () {
-                              if (_tourStep == 3) {
+                              if (_tourStep == 4) {
                                 _moveTour(1);
                               } else {
                                 _startHomeTour();
@@ -1190,35 +1222,36 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                         final scoreFontSize = isShort ? 20.0 : 22.0;
                         final helperFontSize = isShort ? 13.0 : 15.0;
                         final hint = _localizedPostureHint();
-                        final statusLines = _monitoringActive ? 1.0 : 2.0;
+                        final postureMessageBudget = max(
+                          statusFontSize * 2 * 1.05 * textScale,
+                          statusFontSize * 1.05 * textScale +
+                              4 +
+                              helperFontSize * 2.2 * textScale,
+                        );
                         final statusBudget =
                             17 * textScale +
                             3 +
-                            statusFontSize * 1.05 * statusLines * textScale +
+                            postureMessageBudget +
                             5 +
-                            scoreFontSize * 1.15 * textScale +
-                            (hint.isEmpty
-                                ? 0
-                                : 4 + helperFontSize * 2.2 * textScale);
+                            scoreFontSize * 1.15 * textScale;
                         final metricsBudget = max(58.0, 54 * textScale);
-                        final cameraBudget = _cameraStatusMessage == null
-                            ? 0.0
-                            : 34 * textScale;
-                        final imageGap = isShort ? 6.0 : 16.0;
+                        final imageGap = isShort ? 6.0 : 15.0;
                         final metricsGap = isShort ? 6.0 : 12.0;
-                        final accessibilityReserve = max(
-                          0.0,
-                          min(48.0, (textScale - 1) * 112),
-                        );
+                        final double slimeYOffset =
+                            (middleConstraints.maxHeight * 0.02)
+                                .clamp(4.0, 15.0)
+                                .toDouble();
+                        final double metricsYOffset =
+                            (middleConstraints.maxHeight * 0.04)
+                                .clamp(8.0, 30.0)
+                                .toDouble();
                         final characterRoom = max(
                           0.0,
                           middleConstraints.maxHeight -
                               statusBudget -
                               metricsBudget -
-                              cameraBudget -
                               imageGap -
-                              metricsGap -
-                              accessibilityReserve,
+                              metricsGap,
                         );
                         final characterHeight = min(
                           min(
@@ -1238,126 +1271,160 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                             children: [
                               KeyedSubtree(
                                 key: _statusTourKey,
-                                child: Column(
-                                  key: const Key('homeStatusSection'),
-                                  children: [
-                                    Text(
-                                      l10n.status.toUpperCase(),
-                                      key: const Key('homeStatusHeading'),
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        letterSpacing: 1.2,
+                                child: SizedBox(
+                                  height: statusBudget,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.bottomCenter,
+                                    child: SizedBox(
+                                      width: min(
+                                        360,
+                                        middleConstraints.maxWidth,
                                       ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 360,
-                                      ),
-                                      child: Text(
-                                        _localizedPostureStatus(),
-                                        key: const Key('homePostureStatus'),
-                                        maxLines: 2,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: statusFontSize,
-                                          height: 1.05,
-                                          fontWeight: FontWeight.bold,
-                                          color: _statusColor(),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 5),
-                                    Text(
-                                      l10n.score(_stats.dailyScore.round()),
-                                      key: const Key('homeScore'),
-                                      maxLines: 1,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: scoreFontSize,
-                                        height: 1.05,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    if (hint.isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4),
-                                        child: Text(
-                                          hint,
-                                          key: const Key('homePostureHint'),
-                                          maxLines: 2,
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: helperFontSize,
-                                            height: 1.1,
+                                      child: Column(
+                                        key: const Key('homeStatusSection'),
+                                        children: [
+                                          Text(
+                                            l10n.status.toUpperCase(),
+                                            key: const Key('homeStatusHeading'),
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              letterSpacing: 1.2,
+                                            ),
                                           ),
-                                        ),
+                                          const SizedBox(height: 3),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 360,
+                                            ),
+                                            child: Text(
+                                              _localizedPostureStatus(),
+                                              key: const Key(
+                                                'homePostureStatus',
+                                              ),
+                                              maxLines: 2,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: statusFontSize,
+                                                height: 1.05,
+                                                fontWeight: FontWeight.bold,
+                                                color: _statusColor(),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 5),
+                                          Text(
+                                            l10n.score(
+                                              _stats.dailyScore.round(),
+                                            ),
+                                            key: const Key('homeScore'),
+                                            maxLines: 1,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: scoreFontSize,
+                                              height: 1.05,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          if (hint.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 4,
+                                              ),
+                                              child: Text(
+                                                hint,
+                                                key: const Key(
+                                                  'homePostureHint',
+                                                ),
+                                                maxLines: 2,
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  fontSize: helperFontSize,
+                                                  height: 1.1,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: imageGap),
+
+                              Transform.translate(
+                                offset: Offset(0, slimeYOffset),
+                                child: SizedBox(
+                                  height: max(0, characterHeight),
+                                  child: OverflowBox(
+                                    maxWidth: constraints.maxWidth,
+                                    child: SizedBox(
+                                      key: const Key('homeCharacterArtwork'),
+                                      width:
+                                          max(0, characterHeight) *
+                                          characterAspectRatio,
+                                      height: max(0, characterHeight),
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          SlimeCharacter(
+                                            expression: _slimeExpression,
+                                            selection: _cosmetics,
+                                          ),
+                                          if (_cameraStatusMessage != null)
+                                            Align(
+                                              alignment: Alignment.topCenter,
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  6,
+                                                ),
+                                                child: Text(
+                                                  _cameraStatusMessage!,
+                                                  maxLines: 2,
+                                                  textAlign: TextAlign.center,
+                                                  style: const TextStyle(
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              SizedBox(height: metricsGap),
+                              Transform.translate(
+                                offset: Offset(0, metricsYOffset),
+                                child: Row(
+                                  key: const Key('homeTimeMetrics'),
+                                  children: [
+                                    timeMetric(
+                                      icon: Icons.access_time_filled,
+                                      label: _showDeviceScreenTime
+                                          ? l10n.deviceScreenTime
+                                          : l10n.monitoredTime,
+                                      value: _formatTime(
+                                        _showDeviceScreenTime
+                                            ? _liveTimes
+                                                  .deviceScreenTimeSeconds!
+                                            : _liveTimes.monitoredSeconds,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    timeMetric(
+                                      icon: Icons.sentiment_dissatisfied_sharp,
+                                      label: l10n.badPosture,
+                                      value: _formatTime(
+                                        _liveTimes.badPostureSeconds,
+                                      ),
+                                    ),
                                   ],
                                 ),
-                              ),
-                              if (_cameraStatusMessage != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 3),
-                                  child: Text(
-                                    _cameraStatusMessage!,
-                                    maxLines: 2,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                ),
-                              SizedBox(height: imageGap),
-                              SizedBox(
-                                height: max(0, characterHeight),
-                                child: OverflowBox(
-                                  maxWidth: constraints.maxWidth,
-                                  child: SizedBox(
-                                    key: const Key('homeCharacterArtwork'),
-                                    width:
-                                        max(0, characterHeight) *
-                                        characterAspectRatio,
-                                    height: max(0, characterHeight),
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        color: _statusColor().withValues(
-                                          alpha: 0.08,
-                                        ),
-                                        borderRadius: BorderRadius.circular(28),
-                                      ),
-                                      child: Image.asset(
-                                        'images/happy slime.png',
-                                        fit: BoxFit.contain,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(height: metricsGap),
-                              Row(
-                                key: const Key('homeTimeMetrics'),
-                                children: [
-                                  timeMetric(
-                                    icon: Icons.access_time_filled,
-                                    label: _showDeviceScreenTime
-                                        ? l10n.deviceScreenTime
-                                        : l10n.monitoredTime,
-                                    value: _formatTime(
-                                      _showDeviceScreenTime
-                                          ? _liveTimes.deviceScreenTimeSeconds!
-                                          : _liveTimes.monitoredSeconds,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  timeMetric(
-                                    icon: Icons.sentiment_dissatisfied_sharp,
-                                    label: l10n.badPosture,
-                                    value: _formatTime(
-                                      _liveTimes.badPostureSeconds,
-                                    ),
-                                  ),
-                                ],
                               ),
                             ],
                           ),
@@ -1367,27 +1434,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   ),
                   Padding(
                     key: const Key('homeBottomActions'),
-                    padding: EdgeInsets.only(bottom: isShort ? 4 : 8),
+                    padding: EdgeInsets.only(bottom: isShort ? 10 : 14),
                     child: Row(
                       children: [
                         Expanded(
                           flex: 4,
                           child: SizedBox(
+                            key: _customizeTourKey,
                             height: actionHeight,
                             child: FloatingActionButton(
                               key: const Key('homeCustomizeButton'),
                               heroTag: 'homeCustomizeButton',
-                              onPressed: () async {
-                                await Navigator.push<void>(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const Customizes(),
-                                  ),
-                                );
-                                if (mounted) {
-                                  await _refreshPresentationSources();
-                                }
-                              },
+                              onPressed: _openCustomize,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(24),
                               ),
@@ -1459,12 +1517,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   )
                 : null,
             currentStep: step,
-            totalSteps: 5,
+            totalSteps: 6,
             backLabel: l10n.back,
-            nextLabel: step == 4 ? l10n.done : l10n.next,
+            nextLabel: step == 5 ? l10n.done : l10n.next,
             skipLabel: l10n.skipForNow,
             onBack: step == 0 ? null : () => _moveTour(-1),
-            onNext: step == 1 ? null : () => _moveTour(1),
+            onNext: step == 1 || step == 3 ? null : () => _moveTour(1),
             onSkip: () => setState(() => _tourStep = null),
             nextButtonKey: const Key('homeTourNextButton'),
             backButtonKey: const Key('homeTourBackButton'),

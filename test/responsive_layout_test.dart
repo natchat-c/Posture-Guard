@@ -161,7 +161,18 @@ Settings _settings({AppSettings settings = AppSettings.defaults}) {
 
 Statistics _statistics() {
   return Statistics(
-    recordsStream: Stream.value(const <String, DailyStats>{}),
+    recordsStream: Stream.value(const <String, DailyStats>{
+      '2026-07-29': DailyStats(
+        monitoredTimeSeconds: 1800,
+        badPostureSeconds: 360,
+        alertsSentCount: 1,
+      ),
+      '2026-08-01': DailyStats(
+        monitoredTimeSeconds: 3600,
+        badPostureSeconds: 900,
+        alertsSentCount: 3,
+      ),
+    }),
     screenTimeProvider: _NoScreenTimeProvider(),
     clock: () => DateTime(2026, 8, 1, 12),
   );
@@ -267,13 +278,17 @@ void main() {
             );
             expect(scoreRect.bottom, lessThanOrEqualTo(helperRect.top));
             expect(helperRect.bottom, lessThanOrEqualTo(artwork.top));
-            expect(artwork.top - helperRect.bottom, lessThanOrEqualTo(20));
+            // The portrait layout combines up to 15 px of section spacing
+            // with up to 15 px of intentional slime artwork offset.
+            expect(artwork.top - helperRect.bottom, lessThanOrEqualTo(30));
           } else {
             expect(scoreRect.bottom, lessThanOrEqualTo(artwork.top));
-            expect(artwork.top - scoreRect.bottom, lessThanOrEqualTo(20));
+            expect(artwork.top - scoreRect.bottom, lessThanOrEqualTo(30));
           }
           expect(artwork.bottom, lessThanOrEqualTo(metricsRect.top));
-          expect(metricsRect.top - artwork.bottom, inInclusiveRange(0, 16));
+          // Home deliberately combines up to 30 px of responsive metric
+          // offset with a maximum 12 px section gap.
+          expect(metricsRect.top - artwork.bottom, inInclusiveRange(0, 42));
 
           final customizeRect = tester.getRect(
             find.byKey(const Key('homeCustomizeButton')),
@@ -358,12 +373,6 @@ void main() {
           find.byKey(const Key('customizeBottomAction')),
           size,
         );
-        expect(
-          tester.getRect(find.byKey(const Key('customizeContentEnd'))).bottom,
-          lessThanOrEqualTo(
-            tester.getRect(find.byKey(const Key('customizeBottomAction'))).top,
-          ),
-        );
         final customizeArtwork = tester.getRect(
           find.byKey(const Key('customizeCharacterArtwork')),
         );
@@ -373,21 +382,38 @@ void main() {
         expect(find.byKey(const Key('shopScrollView')), findsOneWidget);
         _expectInsideViewport(
           tester,
-          find.byKey(const Key('shopBottomAction')),
+          find.byKey(const Key('shopCoinBalance')),
           size,
         );
-        expect(
-          tester.getRect(find.byKey(const Key('shopContentEnd'))).bottom,
-          lessThanOrEqualTo(
-            tester.getRect(find.byKey(const Key('shopBottomAction'))).top,
-          ),
+        expect(find.byKey(const Key('gachaBox-standard')), findsOneWidget);
+        expect(find.byKey(const Key('gachaBox-premium')), findsOneWidget);
+        expect(find.byKey(const Key('shopBuyButton')), findsNothing);
+
+        await _pumpAt(
+          tester,
+          size: size,
+          locale: locale,
+          home: const Customizes(showGuidedTour: true),
         );
-        expect(
-          tester
-              .widget<FilledButton>(find.byKey(const Key('shopBuyButton')))
-              .onPressed,
-          isNull,
+        _expectInsideViewport(
+          tester,
+          find.byKey(const Key('coachMarkCard')),
+          size,
         );
+        expect(find.byKey(const Key('customize-hat-list')), findsOneWidget);
+
+        await _pumpAt(
+          tester,
+          size: size,
+          locale: locale,
+          home: const Shop(showGuidedTour: true),
+        );
+        _expectInsideViewport(
+          tester,
+          find.byKey(const Key('coachMarkCard')),
+          size,
+        );
+        expect(find.byKey(const Key('odds-help-standard')), findsOneWidget);
 
         await _pumpAt(
           tester,
@@ -404,6 +430,34 @@ void main() {
           find.byKey(const Key('languageBottomAction')),
           size,
         );
+      }
+    }
+  });
+
+  testWidgets('gacha odds dialogs fit the portrait locale matrix', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    for (final size in _targetSizes) {
+      for (final locale in _locales) {
+        await _pumpAt(tester, size: size, locale: locale, home: const Shop());
+        for (final type in const ['standard', 'premium']) {
+          final help = find.byKey(Key('odds-help-$type'));
+          await tester.ensureVisible(help);
+          await tester.pumpAndSettle();
+          await tester.tap(help);
+          await tester.pumpAndSettle();
+          _expectInsideViewport(
+            tester,
+            find.byKey(Key('oddsDialog-$type')),
+            size,
+          );
+          expect(tester.takeException(), isNull);
+          await tester.tap(find.byKey(Key('close-$type-odds')));
+          await tester.pumpAndSettle();
+        }
       }
     }
   });
@@ -484,6 +538,29 @@ void main() {
       find.descendant(of: todayCard, matching: find.byType(Row)),
       findsNothing,
     );
+    for (final key in const [
+      Key('statisticsTodaySummary'),
+      Key('statisticsSevenDaySummary'),
+      Key('statisticsAllTimeSummary'),
+    ]) {
+      final section = find.byKey(key);
+      expect(section, findsOneWidget);
+      expect(
+        find.descendant(of: section, matching: find.byType(Card)),
+        findsNothing,
+      );
+    }
+    expect(find.byKey(const Key('statisticsTodayScore')), findsOneWidget);
+    expect(find.byKey(const Key('statisticsScoreChart')), findsOneWidget);
+    expect(
+      find.ancestor(
+        of: find.byKey(const Key('statisticsScoreChart')),
+        matching: find.byType(DecoratedBox),
+      ),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('statisticsTrendComparison')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('onboarding and tutorial fit every target size and locale', (

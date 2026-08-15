@@ -75,21 +75,18 @@ void main() {
     expect(values.deviceScreenTimeSeconds, 501);
   });
 
-  test(
-    'authoritative repository values reconcile optimistic display values',
-    () {
-      final values = HomeLiveTimes(dateKey: '2026-07-26')
-        ..monitoredSeconds = 110
-        ..badPostureSeconds = 25;
+  test('older repository values do not move the live display backwards', () {
+    final values = HomeLiveTimes(dateKey: '2026-07-26')
+      ..monitoredSeconds = 110
+      ..badPostureSeconds = 25;
 
-      values.reconcile(
-        const DailyStats(monitoredTimeSeconds: 108, badPostureSeconds: 24),
-      );
+    values.reconcile(
+      const DailyStats(monitoredTimeSeconds: 108, badPostureSeconds: 24),
+    );
 
-      expect(values.monitoredSeconds, 108);
-      expect(values.badPostureSeconds, 24);
-    },
-  );
+    expect(values.monitoredSeconds, 110);
+    expect(values.badPostureSeconds, 25);
+  });
 
   test('midnight resets current-day presentation values', () {
     final values = HomeLiveTimes(dateKey: '2026-12-31')

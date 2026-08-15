@@ -48,12 +48,19 @@ void main() {
           monitoringActive: scenario.monitoringActive,
         ),
       );
-      await tester.runAsync(() async {
-        await precacheImage(
-          const AssetImage('images/happy slime.png'),
-          tester.element(find.byType(MyHomePage)),
-        );
-      });
+      for (final asset in const [
+        'images/slimes/happy_slime.png',
+        'images/slimes/neutral_slime.png',
+        'images/slimes/sad_slime.png',
+        'images/slimes/very_sad_slime.png',
+      ]) {
+        await tester.runAsync(() async {
+          await precacheImage(
+            AssetImage(asset),
+            tester.element(find.byType(MyHomePage)),
+          );
+        });
+      }
       await tester.pumpAndSettle();
 
       await expectLater(

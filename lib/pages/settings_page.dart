@@ -68,7 +68,7 @@ class Settings extends StatefulWidget {
 
 class _SettingsState extends State<Settings> with WidgetsBindingObserver {
   static const int customOption = -1;
-  static const List<int> delayOptions = [10, 30, 60];
+  static const List<int> delayOptions = [5, 10, 15];
   static const List<int> frequencyOptions = [15, 30, 60, 300];
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
@@ -682,13 +682,29 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (_loadWarning != null)
-                              Card(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.errorContainer,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Text(_loadWarning!),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.warning_amber_rounded,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        _loadWarning!,
+                                        style: TextStyle(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.error,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             Text(
@@ -919,9 +935,9 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
                                   helperText: l10n.alertDelayHelp,
                                 ),
                                 items: [
+                                  _menuItem(5, l10n.secondsCount(5)),
                                   _menuItem(10, l10n.secondsCount(10)),
-                                  _menuItem(30, l10n.secondsCount(30)),
-                                  _menuItem(60, l10n.minuteCount(1)),
+                                  _menuItem(15, l10n.secondsCount(15)),
                                   _menuItem(customOption, l10n.custom),
                                 ],
                                 onChanged:

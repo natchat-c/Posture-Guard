@@ -145,6 +145,13 @@ class AppLocalizationsTh extends AppLocalizations {
       'คะแนนท่าทางประจำวันช่วยให้คุณได้รับเหรียญ เพื่อนำไปปรับแต่งตัวละคร';
 
   @override
+  String get guideCosmeticsTitle => 'สะสมคอสเมติก';
+
+  @override
+  String get guideCosmeticsBody =>
+      'ใช้เหรียญสะสมคอสเมติกให้สไลม์ แล้วแตะปรับแต่งเพื่อดูไอเทมที่คุณมี';
+
+  @override
   String get guideHelpTitle => 'ต้องการดูวิธีใช้อีกครั้ง?';
 
   @override
@@ -200,10 +207,119 @@ class AppLocalizationsTh extends AppLocalizations {
   String get shop => 'ร้านค้า';
 
   @override
-  String get buy => 'ซื้อ';
+  String get buyMore => 'เลือกซื้อเพิ่ม';
 
   @override
-  String get buyMore => 'เลือกซื้อเพิ่ม';
+  String get hats => 'หมวก';
+
+  @override
+  String get eyewear => 'แว่นตา';
+
+  @override
+  String get holding => 'ของถือ';
+
+  @override
+  String get backAccessories => 'ของตกแต่งด้านหลัง';
+
+  @override
+  String get none => 'ไม่ใส่';
+
+  @override
+  String get customizeTourTitle => 'แต่งตัวให้สไลม์';
+
+  @override
+  String get customizeTourBody =>
+      'สวมคอสเมติกที่สะสมไว้ได้ที่นี่ เลือกจากหมวก แว่นตา ของถือ และของตกแต่งด้านหลัง';
+
+  @override
+  String get customizeShopTourTitle => 'สะสมคอสเมติกเพิ่ม';
+
+  @override
+  String get customizeShopTourBody => 'แตะเลือกซื้อเพิ่มเพื่อไปที่ร้านค้า';
+
+  @override
+  String get shopTourTitle => 'ปลดล็อกคอสเมติก';
+
+  @override
+  String get shopTourBody =>
+      'ใช้เหรียญเปิดกล่องเพื่อปลดล็อกคอสเมติกใหม่ กล่องราคาสูงมีโอกาสได้ไอเทมหายากมากขึ้น แตะ ? เพื่อดูอัตราการได้รับ';
+
+  @override
+  String get standardBox => 'กล่องมาตรฐาน';
+
+  @override
+  String get premiumBox => 'กล่องพรีเมียม';
+
+  @override
+  String get open => 'เปิด';
+
+  @override
+  String get odds => 'อัตราได้รับ';
+
+  @override
+  String boxCost(int count) {
+    return 'ราคา: $count เหรียญ';
+  }
+
+  @override
+  String get dropRates => 'อัตราการได้รับ';
+
+  @override
+  String get duplicatesConvertedInfo => 'ไอเทมซ้ำจะถูกแลกเป็นเหรียญ';
+
+  @override
+  String get duplicateRewards => 'รางวัลจากไอเทมซ้ำ';
+
+  @override
+  String get collection => 'คอลเลกชัน';
+
+  @override
+  String get owned => 'มีแล้ว';
+
+  @override
+  String get locked => 'ล็อกอยู่';
+
+  @override
+  String get starter => 'ไอเทมเริ่มต้น';
+
+  @override
+  String get newCosmetic => 'คอสเมติกใหม่!';
+
+  @override
+  String get gachaRewardNew => 'ใหม่!';
+
+  @override
+  String get duplicate => 'ไอเทมซ้ำ';
+
+  @override
+  String get unlocked => 'ปลดล็อกแล้ว';
+
+  @override
+  String get notEnoughCoins => 'เหรียญไม่พอ';
+
+  @override
+  String convertedToCoins(int coins) {
+    return 'แลกเป็น +$coins เหรียญ';
+  }
+
+  @override
+  String coinCount(int count) {
+    return '$count เหรียญ';
+  }
+
+  @override
+  String coinsBalance(int coins) {
+    return 'เหรียญ: $coins';
+  }
+
+  @override
+  String get gachaOpenFailed => 'เปิดกล่องไม่ได้ โปรดลองอีกครั้ง';
+
+  @override
+  String get ok => 'ตกลง';
+
+  @override
+  String get continueLabel => 'ดำเนินการต่อ';
 
   @override
   String get status => 'สถานะ';
@@ -258,13 +374,6 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get cameraUnavailable => 'ใช้กล้องไม่ได้ การตรวจท่าทางยังทำงานตามปกติ';
-
-  @override
-  String get cameraChecking => 'กำลังตรวจท่าทาง…';
-
-  @override
-  String get cameraFaceNotFound =>
-      'ขยับให้อยู่ในภาพหากต้องการใช้กล้องช่วย การตรวจท่าทางยังทำงานอยู่';
 
   @override
   String get postureSetupNeeded =>
@@ -455,6 +564,9 @@ class AppLocalizationsTh extends AppLocalizations {
   String get pastSevenDays => '7 วันที่ผ่านมา';
 
   @override
+  String get sevenDaySummary => 'สรุป 7 วัน';
+
+  @override
   String get allTime => 'ตั้งแต่เริ่มใช้งาน';
 
   @override
@@ -468,6 +580,21 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get postureScore => 'คะแนนท่าทาง';
+
+  @override
+  String get scoreExcellent => 'ยอดเยี่ยม';
+
+  @override
+  String get scoreGood => 'ดี';
+
+  @override
+  String get scoreFair => 'พอใช้';
+
+  @override
+  String get scoreNeedsAttention => 'ควรใส่ใจ';
+
+  @override
+  String get todayNoPostureData => 'วันนี้ยังไม่มีข้อมูลท่าทาง';
 
   @override
   String get alertsSent => 'จำนวนการแจ้งเตือน';
@@ -510,17 +637,28 @@ class AppLocalizationsTh extends AppLocalizations {
       'ยังไม่มีประวัติท่าทาง สถิติจะแสดงหลังเริ่มตรวจท่าทาง';
 
   @override
+  String get statisticsEmptyTitle => 'ยังไม่มีข้อมูลท่าทาง';
+
+  @override
+  String get statisticsEmptyBody =>
+      'เริ่มใช้ Posture Guard แล้วสถิติของคุณจะปรากฏที่นี่';
+
+  @override
   String trendImprovement(String points) {
-    return 'คะแนนดีขึ้น $points คะแนน';
+    return 'สูงกว่า 7 วันก่อนหน้า $points จุดเปอร์เซ็นต์';
   }
 
   @override
   String trendDecline(String points) {
-    return 'คะแนนลดลง $points คะแนน';
+    return 'ต่ำกว่า 7 วันก่อนหน้า $points จุดเปอร์เซ็นต์';
   }
 
   @override
-  String get trendUnchanged => 'คะแนนใกล้เคียงเดิม';
+  String get trendUnchanged => 'ไม่เปลี่ยนแปลงอย่างมีนัยสำคัญจาก 7 วันก่อนหน้า';
+
+  @override
+  String get notEnoughPreviousData =>
+      'ข้อมูลช่วงก่อนหน้ายังไม่เพียงพอสำหรับการเปรียบเทียบ';
 
   @override
   String get weekdayMon => 'จ.';

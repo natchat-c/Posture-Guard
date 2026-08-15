@@ -7,6 +7,8 @@ import 'package:postureguard/pages/tutorial_page.dart';
 import 'package:postureguard/services/device_screen_time_service.dart';
 import 'package:postureguard/services/statistics_repository.dart';
 import 'package:postureguard/widgets/no_stretch_scroll_behavior.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 class _UnsupportedScreenTimeProvider extends DeviceScreenTimeProvider {
   @override
@@ -33,6 +35,11 @@ Widget _app(Widget home) {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+  });
+
   testWidgets('global behavior clamps and suppresses overscroll decoration', (
     tester,
   ) async {

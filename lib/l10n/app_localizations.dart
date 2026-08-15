@@ -350,6 +350,18 @@ abstract class AppLocalizations {
   /// **'Your daily posture score earns coins. Use them to customize your character.'**
   String get guideCoinsBody;
 
+  /// No description provided for @guideCosmeticsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Collect cosmetics'**
+  String get guideCosmeticsTitle;
+
+  /// No description provided for @guideCosmeticsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Use your coins to collect cosmetics for your slime. Tap Customize to see what you own.'**
+  String get guideCosmeticsBody;
+
   /// No description provided for @guideHelpTitle.
   ///
   /// In en, this message translates to:
@@ -452,17 +464,215 @@ abstract class AppLocalizations {
   /// **'Shop'**
   String get shop;
 
-  /// No description provided for @buy.
-  ///
-  /// In en, this message translates to:
-  /// **'Buy'**
-  String get buy;
-
   /// No description provided for @buyMore.
   ///
   /// In en, this message translates to:
   /// **'Buy more'**
   String get buyMore;
+
+  /// No description provided for @hats.
+  ///
+  /// In en, this message translates to:
+  /// **'Hats'**
+  String get hats;
+
+  /// No description provided for @eyewear.
+  ///
+  /// In en, this message translates to:
+  /// **'Eyewear'**
+  String get eyewear;
+
+  /// No description provided for @holding.
+  ///
+  /// In en, this message translates to:
+  /// **'Holding'**
+  String get holding;
+
+  /// No description provided for @backAccessories.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get backAccessories;
+
+  /// No description provided for @none.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get none;
+
+  /// No description provided for @customizeTourTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Equip your cosmetics'**
+  String get customizeTourTitle;
+
+  /// No description provided for @customizeTourBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Equip the cosmetics you\'ve collected here. Choose from Hats, Eyewear, Holding, and Back.'**
+  String get customizeTourBody;
+
+  /// No description provided for @customizeShopTourTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Collect more cosmetics'**
+  String get customizeShopTourTitle;
+
+  /// No description provided for @customizeShopTourBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Buy more to open the Shop.'**
+  String get customizeShopTourBody;
+
+  /// No description provided for @shopTourTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock cosmetics'**
+  String get shopTourTitle;
+
+  /// No description provided for @shopTourBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Spend coins on boxes to unlock new cosmetics. Higher-cost boxes have better odds for rare items. Tap ? to see each box\'s drop rates.'**
+  String get shopTourBody;
+
+  /// No description provided for @standardBox.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard Box'**
+  String get standardBox;
+
+  /// No description provided for @premiumBox.
+  ///
+  /// In en, this message translates to:
+  /// **'Premium Box'**
+  String get premiumBox;
+
+  /// No description provided for @open.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get open;
+
+  /// No description provided for @odds.
+  ///
+  /// In en, this message translates to:
+  /// **'Odds'**
+  String get odds;
+
+  /// No description provided for @boxCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost: {count} coins'**
+  String boxCost(int count);
+
+  /// No description provided for @dropRates.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop rates'**
+  String get dropRates;
+
+  /// No description provided for @duplicatesConvertedInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicates are converted into coins.'**
+  String get duplicatesConvertedInfo;
+
+  /// No description provided for @duplicateRewards.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate rewards'**
+  String get duplicateRewards;
+
+  /// No description provided for @collection.
+  ///
+  /// In en, this message translates to:
+  /// **'Collection'**
+  String get collection;
+
+  /// No description provided for @owned.
+  ///
+  /// In en, this message translates to:
+  /// **'Owned'**
+  String get owned;
+
+  /// No description provided for @locked.
+  ///
+  /// In en, this message translates to:
+  /// **'Locked'**
+  String get locked;
+
+  /// No description provided for @starter.
+  ///
+  /// In en, this message translates to:
+  /// **'Starter'**
+  String get starter;
+
+  /// No description provided for @newCosmetic.
+  ///
+  /// In en, this message translates to:
+  /// **'New cosmetic!'**
+  String get newCosmetic;
+
+  /// No description provided for @gachaRewardNew.
+  ///
+  /// In en, this message translates to:
+  /// **'NEW!'**
+  String get gachaRewardNew;
+
+  /// No description provided for @duplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get duplicate;
+
+  /// No description provided for @unlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlocked'**
+  String get unlocked;
+
+  /// No description provided for @notEnoughCoins.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough coins'**
+  String get notEnoughCoins;
+
+  /// No description provided for @convertedToCoins.
+  ///
+  /// In en, this message translates to:
+  /// **'Converted to +{coins} coins'**
+  String convertedToCoins(int coins);
+
+  /// No description provided for @coinCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} coins'**
+  String coinCount(int count);
+
+  /// No description provided for @coinsBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Coins: {coins}'**
+  String coinsBalance(int coins);
+
+  /// No description provided for @gachaOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open this box. Please try again.'**
+  String get gachaOpenFailed;
+
+  /// No description provided for @ok.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get ok;
+
+  /// No description provided for @continueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get continueLabel;
 
   /// No description provided for @status.
   ///
@@ -565,18 +775,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The camera is unavailable. Posture monitoring will continue.'**
   String get cameraUnavailable;
-
-  /// No description provided for @cameraChecking.
-  ///
-  /// In en, this message translates to:
-  /// **'Checking your position…'**
-  String get cameraChecking;
-
-  /// No description provided for @cameraFaceNotFound.
-  ///
-  /// In en, this message translates to:
-  /// **'Move into view if you want camera help. Posture monitoring is still working.'**
-  String get cameraFaceNotFound;
 
   /// No description provided for @postureSetupNeeded.
   ///
@@ -908,6 +1106,12 @@ abstract class AppLocalizations {
   /// **'Past 7 Days'**
   String get pastSevenDays;
 
+  /// No description provided for @sevenDaySummary.
+  ///
+  /// In en, this message translates to:
+  /// **'7-Day Summary'**
+  String get sevenDaySummary;
+
   /// No description provided for @allTime.
   ///
   /// In en, this message translates to:
@@ -937,6 +1141,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Posture score'**
   String get postureScore;
+
+  /// No description provided for @scoreExcellent.
+  ///
+  /// In en, this message translates to:
+  /// **'Excellent'**
+  String get scoreExcellent;
+
+  /// No description provided for @scoreGood.
+  ///
+  /// In en, this message translates to:
+  /// **'Good'**
+  String get scoreGood;
+
+  /// No description provided for @scoreFair.
+  ///
+  /// In en, this message translates to:
+  /// **'Fair'**
+  String get scoreFair;
+
+  /// No description provided for @scoreNeedsAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get scoreNeedsAttention;
+
+  /// No description provided for @todayNoPostureData.
+  ///
+  /// In en, this message translates to:
+  /// **'No posture data yet today'**
+  String get todayNoPostureData;
 
   /// No description provided for @alertsSent.
   ///
@@ -1016,23 +1250,41 @@ abstract class AppLocalizations {
   /// **'No posture history yet. Your statistics will appear after monitoring begins.'**
   String get noHistory;
 
+  /// No description provided for @statisticsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No posture data yet'**
+  String get statisticsEmptyTitle;
+
+  /// No description provided for @statisticsEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Posture Guard and your statistics will appear here.'**
+  String get statisticsEmptyBody;
+
   /// No description provided for @trendImprovement.
   ///
   /// In en, this message translates to:
-  /// **'Your score improved by {points} points'**
+  /// **'{points} percentage points higher than previous 7 days'**
   String trendImprovement(String points);
 
   /// No description provided for @trendDecline.
   ///
   /// In en, this message translates to:
-  /// **'Your score went down by {points} points'**
+  /// **'{points} percentage points lower than previous 7 days'**
   String trendDecline(String points);
 
   /// No description provided for @trendUnchanged.
   ///
   /// In en, this message translates to:
-  /// **'Your score is about the same'**
+  /// **'No meaningful change from previous 7 days'**
   String get trendUnchanged;
+
+  /// No description provided for @notEnoughPreviousData.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough previous data for comparison'**
+  String get notEnoughPreviousData;
 
   /// No description provided for @weekdayMon.
   ///

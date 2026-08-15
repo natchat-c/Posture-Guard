@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:postureguard/l10n/app_localizations.dart';
@@ -9,6 +11,7 @@ Widget _home({
   required String status,
   Locale locale = const Locale('en'),
   bool monitoringActive = true,
+  int coinBalance = 0,
 }) {
   return MaterialApp(
     locale: locale,
@@ -19,6 +22,7 @@ Widget _home({
       testMode: true,
       initialPostureStatus: status,
       initialMonitoringActive: monitoringActive,
+      initialCoinBalance: coinBalance,
     ),
   );
 }
@@ -27,6 +31,67 @@ void main() {
   setUp(() {
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
+  });
+
+  testWidgets('checking-position copy is absent in English and Thai', (
+    tester,
+  ) async {
+    for (final locale in const [Locale('en'), Locale('th')]) {
+      await tester.pumpWidget(_home(status: 'WARNING', locale: locale));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Checking your position'), findsNothing);
+      expect(find.textContaining('กำลังตรวจท่าทาง'), findsNothing);
+    }
+  });
+
+  testWidgets('posture state changes keep the character vertically stable', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final positions = <double>[];
+    for (final scenario in const [
+      ('GOOD', true),
+      ('WARNING', true),
+      ('BAD', true),
+      ('GOOD', false),
+    ]) {
+      await tester.pumpWidget(
+        _home(status: scenario.$1, monitoringActive: scenario.$2),
+      );
+      await tester.pumpAndSettle();
+      positions.add(
+        tester.getRect(find.byKey(const Key('homeCharacterArtwork'))).top,
+      );
+    }
+
+    expect(positions.reduce(max) - positions.reduce(min), lessThanOrEqualTo(1));
+  });
+
+  testWidgets('large coin balances remain readable without enlarging control', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_home(status: 'GOOD', coinBalance: 99999));
+    await tester.pumpAndSettle();
+
+    final balance = tester.widget<Text>(
+      find.byKey(const Key('homeCoinBalanceText')),
+    );
+    expect(balance.data, '100K');
+    expect(balance.style?.fontSize, 20);
+    expect(
+      tester.getRect(find.byKey(const Key('homeCoinBalance'))).width,
+      lessThanOrEqualTo(104),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('English Home shows compact Good, Warning, and Bad wording', (

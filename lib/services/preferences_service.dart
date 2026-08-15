@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +15,7 @@ class PreferenceKeys {
   static const String alertFrequencySeconds = 'alertFrequencySeconds';
   static const String alertsEnabled = 'alertsEnabled';
   static const String settingsPendingSync = 'settingsPendingSync';
+  static const String settingsUpdatedAtEpochMs = 'settingsUpdatedAtEpochMs';
   static const String hasCalibration = 'hasCalibration';
   static const String neutralPhoneAngle = 'neutralPhoneAngle';
   static const String neutralHeadX = 'neutralHeadX';
@@ -25,6 +28,12 @@ class PreferenceKeys {
       'notificationPermissionRequested';
   static const String cameraPermissionRequested = 'cameraPermissionRequested';
   static const String alertsMutedUntilEpochMs = 'alertsMutedUntilEpochMs';
+  static const String equippedHatId = 'equippedHatId';
+  static const String equippedEyewearId = 'equippedEyewearId';
+  static const String equippedHoldingId = 'equippedHoldingId';
+  static const String equippedBackId = 'equippedBackId';
+  static const String cosmeticEconomyVersion = 'cosmeticEconomyVersion';
+  static const String ownedCosmeticIds = 'ownedCosmeticIds';
 }
 
 class SettingsLoadResult {
@@ -72,52 +81,10 @@ class SettingsRepository implements SettingsStore {
   @override
   Future<SettingsLoadResult> load() async {
     final cached = await loadCachedSettings(_preferences);
-    final hasPendingLocalSave =
-        await _preferences.getBool(PreferenceKeys.settingsPendingSync) ?? false;
-
-    if (cached != null && hasPendingLocalSave) {
-      try {
-        await _settingsReference.update({
-          ...cached.toMap(),
-          'updatedAt': ServerValue.timestamp,
-        });
-        await _preferences.setBool(PreferenceKeys.settingsPendingSync, false);
-        return SettingsLoadResult(settings: cached);
-      } catch (_) {
-        return SettingsLoadResult(
-          settings: cached,
-          warning:
-              'Firebase sync is still pending. Using settings saved on this device.',
-        );
-      }
-    }
-
-    try {
-      final snapshot = await _settingsReference.get();
-      if (!snapshot.exists || snapshot.value == null) {
-        final settings = cached ?? AppSettings.defaults;
-        await cacheSettings(_preferences, settings);
-        return SettingsLoadResult(settings: settings);
-      }
-
-      final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
-      // Old detectionMode/useCameraMode fields are intentionally ignored.
-      final settings = AppSettings.fromMap(
-        data,
-        fallback: cached ?? AppSettings.defaults,
-      );
-      await cacheSettings(_preferences, settings);
-      return SettingsLoadResult(settings: settings);
-    } catch (error) {
-      final settings = cached ?? AppSettings.defaults;
-      await cacheSettings(_preferences, settings);
-      return SettingsLoadResult(
-        settings: settings,
-        warning: cached == null
-            ? 'Could not load Firebase settings. Using safe defaults.'
-            : 'Could not reach Firebase. Using settings saved on this device.',
-      );
-    }
+    final settings = cached ?? AppSettings.defaults;
+    if (cached == null) await cacheSettings(_preferences, settings);
+    unawaited(_synchronize(settings, allowLegacyRemote: cached == null));
+    return SettingsLoadResult(settings: settings);
   }
 
   @override
@@ -126,25 +93,71 @@ class SettingsRepository implements SettingsStore {
       throw const FormatException('Settings are outside the allowed range.');
     }
 
-    await cacheSettings(_preferences, settings);
+    final previousRevision = await _preferences.getInt(
+      PreferenceKeys.settingsUpdatedAtEpochMs,
+    );
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final revision = previousRevision != null && previousRevision >= now
+        ? previousRevision + 1
+        : now;
+    await cacheSettings(_preferences, settings, updatedAtEpochMs: revision);
     await _preferences.setBool(PreferenceKeys.settingsPendingSync, true);
+    unawaited(_synchronize(settings));
+    return const SettingsSaveResult(savedLocally: true, savedToFirebase: false);
+  }
 
+  Future<void> _synchronize(
+    AppSettings local, {
+    bool allowLegacyRemote = false,
+  }) async {
     try {
-      await _settingsReference.update({
-        ...settings.toMap(),
-        'updatedAt': ServerValue.timestamp,
-      });
-      await _preferences.setBool(PreferenceKeys.settingsPendingSync, false);
-      return const SettingsSaveResult(
-        savedLocally: true,
-        savedToFirebase: true,
-      );
-    } catch (error) {
-      return SettingsSaveResult(
-        savedLocally: true,
-        savedToFirebase: false,
-        error: error,
-      );
+      final pending =
+          await _preferences.getBool(PreferenceKeys.settingsPendingSync) ??
+          false;
+      final localRevision =
+          await _preferences.getInt(PreferenceKeys.settingsUpdatedAtEpochMs) ??
+          0;
+      if (pending) {
+        final result = await _settingsReference.runTransaction((value) {
+          final data = value is Map
+              ? Map<String, Object?>.fromEntries(
+                  value.entries.map(
+                    (entry) => MapEntry(entry.key.toString(), entry.value),
+                  ),
+                )
+              : <String, Object?>{};
+          final remoteRevision =
+              (data['settingsUpdatedAtEpochMs'] as num?)?.toInt() ?? 0;
+          if (remoteRevision > localRevision) {
+            return Transaction.abort();
+          }
+          data
+            ..addAll(local.toMap())
+            ..['settingsUpdatedAtEpochMs'] = localRevision
+            ..['updatedAt'] = ServerValue.timestamp;
+          return Transaction.success(data);
+        });
+        if (result.committed) {
+          await _preferences.setBool(PreferenceKeys.settingsPendingSync, false);
+        }
+        return;
+      }
+
+      final snapshot = await _settingsReference.get();
+      if (!snapshot.exists || snapshot.value is! Map) return;
+      final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
+      final remoteRevision = (data['settingsUpdatedAtEpochMs'] as num?)
+          ?.toInt();
+      if ((remoteRevision != null && remoteRevision > localRevision) ||
+          (allowLegacyRemote && remoteRevision == null)) {
+        await cacheSettings(
+          _preferences,
+          AppSettings.fromMap(data, fallback: local),
+          updatedAtEpochMs: remoteRevision,
+        );
+      }
+    } catch (_) {
+      // Local settings are authoritative while cloud sync is unavailable.
     }
   }
 
@@ -172,8 +185,9 @@ class SettingsRepository implements SettingsStore {
 
   static Future<void> cacheSettings(
     SharedPreferencesAsync preferences,
-    AppSettings settings,
-  ) async {
+    AppSettings settings, {
+    int? updatedAtEpochMs,
+  }) async {
     await preferences.setBool(
       PreferenceKeys.monitoringEnabled,
       settings.monitoringEnabled,
@@ -191,6 +205,12 @@ class SettingsRepository implements SettingsStore {
       settings.alertsEnabled,
     );
     await preferences.setBool(PreferenceKeys.hasCachedSettings, true);
+    if (updatedAtEpochMs != null) {
+      await preferences.setInt(
+        PreferenceKeys.settingsUpdatedAtEpochMs,
+        updatedAtEpochMs,
+      );
+    }
   }
 }
 
@@ -245,6 +265,19 @@ class CalibrationRepository {
         await _preferences.getBool(PreferenceKeys.calibrationPendingSync) ??
         false;
 
+    // Production startup never waits for Firebase. Test/injected loaders keep
+    // the explicit awaited path below for deterministic repository checks.
+    if (_remoteLoader == null) {
+      unawaited(
+        _synchronizeCachedCalibration(
+          cached,
+          localRevision,
+          hasPendingLocalSave: hasPendingLocalSave,
+        ),
+      );
+      return CalibrationLoadResult(calibration: cached);
+    }
+
     if (cached != null && hasPendingLocalSave) {
       try {
         await _syncCalibration(
@@ -266,9 +299,7 @@ class CalibrationRepository {
     }
 
     try {
-      final remoteValue = _remoteLoader != null
-          ? await _remoteLoader()
-          : (await _settingsReference.get()).value;
+      final remoteValue = await _remoteLoader();
       if (remoteValue == null) {
         return CalibrationLoadResult(calibration: cached);
       }
@@ -355,6 +386,14 @@ class CalibrationRepository {
     );
     await _preferences.setBool(PreferenceKeys.calibrationPendingSync, true);
 
+    if (_remoteUpdater == null) {
+      unawaited(_synchronizePendingCalibration(calibration, revision));
+      return const CalibrationSaveResult(
+        savedLocally: true,
+        savedToFirebase: false,
+      );
+    }
+
     try {
       await _syncCalibration(calibration, revision);
       await _preferences.setBool(PreferenceKeys.calibrationPendingSync, false);
@@ -368,6 +407,76 @@ class CalibrationRepository {
         savedToFirebase: false,
         error: error,
       );
+    }
+  }
+
+  Future<void> _synchronizeCachedCalibration(
+    Calibration? cached,
+    int? localRevision, {
+    required bool hasPendingLocalSave,
+  }) async {
+    try {
+      if (cached != null && hasPendingLocalSave) {
+        await _synchronizePendingCalibration(
+          cached,
+          localRevision ?? DateTime.now().millisecondsSinceEpoch,
+        );
+        return;
+      }
+
+      final remoteValue = (await _settingsReference.get()).value;
+      if (remoteValue is! Map ||
+          !remoteValue.containsKey('neutralPhoneAngle')) {
+        return;
+      }
+      final data = Map<dynamic, dynamic>.from(remoteValue);
+      final phoneAngle = (data['neutralPhoneAngle'] as num?)?.toDouble();
+      final headAngle = (data['neutralHeadX'] as num?)?.toDouble();
+      final remoteRevision = (data['calibrationUpdatedAtEpochMs'] as num?)
+          ?.toInt();
+      final latestLocalRevision = await _preferences.getInt(
+        PreferenceKeys.calibrationUpdatedAtEpochMs,
+      );
+      if (phoneAngle == null ||
+          !Calibration.isValidPhoneAngle(phoneAngle) ||
+          (latestLocalRevision != null &&
+              (remoteRevision == null ||
+                  remoteRevision < latestLocalRevision))) {
+        return;
+      }
+      await cacheCalibration(
+        _preferences,
+        Calibration(
+          neutralPhoneAngle: phoneAngle,
+          neutralHeadX:
+              headAngle != null && Calibration.isValidHeadAngle(headAngle)
+              ? headAngle
+              : null,
+        ),
+        updatedAtEpochMs: remoteRevision,
+      );
+    } catch (_) {
+      // The local calibration remains usable until a later opportunity.
+    }
+  }
+
+  Future<void> _synchronizePendingCalibration(
+    Calibration calibration,
+    int revision,
+  ) async {
+    try {
+      await _syncCalibration(calibration, revision);
+      final latestRevision = await _preferences.getInt(
+        PreferenceKeys.calibrationUpdatedAtEpochMs,
+      );
+      if (latestRevision == revision) {
+        await _preferences.setBool(
+          PreferenceKeys.calibrationPendingSync,
+          false,
+        );
+      }
+    } catch (_) {
+      // Pending remains true and will retry on a later load/save.
     }
   }
 

@@ -242,9 +242,49 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     await tester.pumpAndSettle();
 
-    expect(find.text('30 seconds'), findsOneWidget);
+    expect(find.text('Custom'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const Key('customDelayField')))
+          .controller
+          ?.text,
+      '30',
+    );
     expect(find.text('5 minutes'), findsOneWidget);
     expect(find.byKey(const Key('saveSettingsButton')), findsOneWidget);
+  });
+
+  testWidgets('alert delay offers 5, 10, 15 seconds and sends changes', (
+    tester,
+  ) async {
+    final store = _FakeSettingsStore(AppSettings.defaults);
+    AppSettings? communicatedSettings;
+    await tester.pumpWidget(
+      _settingsApp(
+        store,
+        onSettingsSaved: (settings) async {
+          communicatedSettings = settings;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _bringIntoView(tester, find.byKey(const Key('alertDelayDropdown')));
+    await tester.tap(find.byKey(const Key('alertDelayDropdown')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('5 seconds'), findsOneWidget);
+    expect(find.text('10 seconds'), findsWidgets);
+    expect(find.text('15 seconds'), findsWidgets);
+    // The one remaining 30-second label belongs to repeat frequency, not delay.
+    expect(find.text('30 seconds'), findsOneWidget);
+
+    await tester.tap(find.text('15 seconds').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('saveSettingsButton')));
+    await tester.pumpAndSettle();
+
+    expect(store.savedSettings?.alertDelaySeconds, 15);
+    expect(communicatedSettings?.alertDelaySeconds, 15);
   });
 
   testWidgets('changing frequency updates and saves selected value', (

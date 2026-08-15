@@ -111,8 +111,12 @@ void main() {
     },
   );
 
-  test('missing days are charted as zero but excluded from averages', () {
+  test('chart points distinguish missing days from a genuine zero score', () {
     final records = {
+      '2026-07-25': const DailyStats(
+        monitoredTimeSeconds: 60,
+        badPostureSeconds: 60,
+      ),
       '2026-07-26': const DailyStats(
         monitoredTimeSeconds: 60,
         badPostureSeconds: 0,
@@ -123,11 +127,94 @@ void main() {
       now: DateTime(2026, 7, 26),
     );
 
-    expect(summary.scoresForPastSevenDays(records), [0, 0, 0, 0, 0, 0, 100]);
-    expect(summary.pastSeven.trackedDays, 1);
-    expect(summary.pastSeven.averageDailyScore, 100);
+    final points = summary.scorePointsForPastSevenDays(records);
+
+    expect(points, hasLength(7));
+    expect(
+      points.map((point) => point.date),
+      orderedEquals([
+        DateTime(2026, 7, 20),
+        DateTime(2026, 7, 21),
+        DateTime(2026, 7, 22),
+        DateTime(2026, 7, 23),
+        DateTime(2026, 7, 24),
+        DateTime(2026, 7, 25),
+        DateTime(2026, 7, 26),
+      ]),
+    );
+    expect(points.take(5).map((point) => point.score), everyElement(isNull));
+    expect(points[5].score, 0);
+    expect(points[5].hasData, isTrue);
+    expect(points.last.score, 100);
+    expect(points.last.isToday, isTrue);
+    expect(points.take(6).every((point) => !point.isToday), isTrue);
+    expect(
+      points.where((point) => point.hasData).map((point) => point.score),
+      everyElement(inInclusiveRange(0, 100)),
+    );
+    expect(summary.pastSeven.trackedDays, 2);
+    expect(summary.pastSeven.averageDailyScore, 50);
     expect(summary.allTime.bestDay, isNull);
     expect(summary.trend, ScoreTrend.insufficientData);
+  });
+
+  group('previous seven-day trend', () {
+    StatisticsSummary summaryFor({
+      required int currentBadSeconds,
+      int? previousBadSeconds,
+    }) {
+      return StatisticsSummary.calculate(
+        records: {
+          '2026-07-26': DailyStats(
+            monitoredTimeSeconds: 1000,
+            badPostureSeconds: currentBadSeconds,
+          ),
+          if (previousBadSeconds != null)
+            '2026-07-19': DailyStats(
+              monitoredTimeSeconds: 1000,
+              badPostureSeconds: previousBadSeconds,
+            ),
+        },
+        now: DateTime(2026, 7, 26),
+      );
+    }
+
+    test('reports a positive percentage-point difference', () {
+      final summary = summaryFor(
+        currentBadSeconds: 200,
+        previousBadSeconds: 400,
+      );
+
+      expect(summary.trend, ScoreTrend.improvement);
+      expect(summary.trendPoints, 20);
+    });
+
+    test('reports a negative percentage-point difference', () {
+      final summary = summaryFor(
+        currentBadSeconds: 400,
+        previousBadSeconds: 200,
+      );
+
+      expect(summary.trend, ScoreTrend.decline);
+      expect(summary.trendPoints, -20);
+    });
+
+    test('reports equal period scores as unchanged', () {
+      final summary = summaryFor(
+        currentBadSeconds: 250,
+        previousBadSeconds: 250,
+      );
+
+      expect(summary.trend, ScoreTrend.unchanged);
+      expect(summary.trendPoints, 0);
+    });
+
+    test('does not compare when the previous period has no data', () {
+      final summary = summaryFor(currentBadSeconds: 200);
+
+      expect(summary.trend, ScoreTrend.insufficientData);
+      expect(summary.trendPoints, isNull);
+    });
   });
 
   test('device screen-time override never changes posture score', () {

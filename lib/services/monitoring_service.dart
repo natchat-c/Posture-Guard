@@ -261,6 +261,11 @@ class MonitoringService {
     FlutterForegroundTask.sendDataToTask(const {'command': 'state'});
   }
 
+  static void requestStatisticsSync() {
+    if (!isSupported) return;
+    FlutterForegroundTask.sendDataToTask(const {'command': 'syncStatistics'});
+  }
+
   static void alertMuteChanged() {
     if (!isSupported) return;
     FlutterForegroundTask.sendDataToTask(const {'command': 'alertMuteChanged'});
@@ -387,6 +392,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       _preferences,
     );
     await _loadPendingStats();
+    _statisticsRepository = StatisticsRepository();
 
     try {
       await PostureNotificationService.initialize();
@@ -395,19 +401,9 @@ class PostureMonitoringTaskHandler extends TaskHandler {
       debugPrint('Notification initialization failed in service: $error');
     }
 
-    try {
-      if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
-        );
-      }
-      _statisticsRepository = StatisticsRepository();
-    } catch (error) {
-      _sendError(
-        'Firebase is unavailable. Monitoring will continue and statistics will retry later.',
-      );
-      debugPrint('Firebase initialization failed in service: $error');
-    }
+    // Cloud setup is deliberately detached from sensor startup. All posture
+    // events are committed locally by StatisticsRepository before sync.
+    unawaited(_initializeCloudSynchronization());
 
     if (_calibration == null) {
       _calibration = const Calibration(
@@ -441,6 +437,19 @@ class PostureMonitoringTaskHandler extends TaskHandler {
 
     _lastTick = timestamp;
     _sendState();
+  }
+
+  Future<void> _initializeCloudSynchronization() async {
+    try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      }
+      await _statisticsRepository?.synchronize();
+    } catch (error) {
+      debugPrint('Cloud statistics sync is unavailable: $error');
+    }
   }
 
   Future<void> _startSensorTracking() async {
@@ -692,20 +701,7 @@ class PostureMonitoringTaskHandler extends TaskHandler {
   }
 
   Future<void> _flushPendingStats() async {
-    var repository = _statisticsRepository;
-    if (repository == null) {
-      try {
-        if (Firebase.apps.isEmpty) {
-          await Firebase.initializeApp(
-            options: DefaultFirebaseOptions.currentPlatform,
-          );
-        }
-        repository = StatisticsRepository();
-        _statisticsRepository = repository;
-      } catch (_) {
-        return;
-      }
-    }
+    final repository = _statisticsRepository ??= StatisticsRepository();
 
     for (final entry in _pendingStats.entries.toList()) {
       if (entry.value.isEmpty) {
@@ -718,7 +714,9 @@ class PostureMonitoringTaskHandler extends TaskHandler {
         _pendingStats.remove(entry.key);
         await _savePendingStats();
       } catch (error) {
-        debugPrint('Background statistics sync failed: $error');
+        // A local-storage failure is the only reason addDelta throws. Keep the
+        // service accumulator intact so the next controlled flush can retry.
+        debugPrint('Could not commit local monitoring statistics: $error');
         break;
       }
     }
@@ -804,6 +802,11 @@ class PostureMonitoringTaskHandler extends TaskHandler {
 
     if (command == 'language') {
       unawaited(_updateForegroundNotification());
+      return;
+    }
+
+    if (command == 'syncStatistics') {
+      unawaited(_statisticsRepository?.synchronize());
       return;
     }
 

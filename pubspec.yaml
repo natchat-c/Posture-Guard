@@ -76,7 +76,12 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - images/happy slime.png
+    - images/slimes/
+    - images/accessories/hats/
+    - images/accessories/eyewear/
+    - images/accessories/holding/
+    - images/accessories/back/
+    - images/boxes/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
