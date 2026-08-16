@@ -193,7 +193,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get screenTimeTourBody =>
-      'Allow access to show today\'s total phone screen time.';
+      'Screen-time access is optional. Allow it to show today\'s total phone screen time, or skip and use Posture Guard\'s monitored-time fallback.';
+
+  @override
+  String get settingsTourPrivacyBody =>
+      'Camera assistance is optional. Before enabling it, read Privacy & PDPA to see how the camera and your data are handled.';
+
+  @override
+  String get settingsTourCameraBody =>
+      'You can turn on camera assistance for extra posture detection, or skip this step and continue using phone sensors only.';
+
+  @override
+  String get turnOnCameraAssistance => 'Turn on camera assistance';
 
   @override
   String get helpTooltip => 'How to use Posture Guard';

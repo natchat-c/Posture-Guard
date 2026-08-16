@@ -807,6 +807,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
     if (!_monitoringActive ||
         !_homeIsVisible ||
+        !_screenInteractive ||
         !_cameraAssistEnabled ||
         !_cameraPermissionGranted) {
       return;
@@ -814,8 +815,23 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     _cameraStarting = true;
     try {
+      if (!await _faceDetectorLifecycle.start()) {
+        _markCameraUnavailable(l10n.cameraUnavailable);
+        return;
+      }
+      if (!mounted ||
+          !_monitoringActive ||
+          !_homeIsVisible ||
+          !_screenInteractive ||
+          !_cameraAssistEnabled ||
+          !_cameraPermissionGranted) {
+        await _faceDetectorLifecycle.stop();
+        return;
+      }
+
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
+        await _faceDetectorLifecycle.stop();
         _markCameraUnavailable(l10n.cameraUnavailable);
         return;
       }
@@ -837,17 +853,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       if (!mounted ||
           !_monitoringActive ||
           !_homeIsVisible ||
+          !_screenInteractive ||
           !_cameraAssistEnabled ||
           !_cameraPermissionGranted) {
         await controller.dispose();
+        await _faceDetectorLifecycle.stop();
         return;
       }
 
-      if (!_faceDetectorLifecycle.start()) {
-        await controller.dispose();
-        _markCameraUnavailable(l10n.cameraUnavailable);
-        return;
-      }
       _cameraController = controller;
       _cameraStatusMessage = null;
       await controller.startImageStream(_processCameraImage);

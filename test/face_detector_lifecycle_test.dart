@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:postureguard/services/face_detector_lifecycle.dart';
+import 'package:postureguard/services/mlkit_initializer.dart';
 
 class _FakeDetector implements FaceDetectorClient {
   _FakeDetector({this.processingError});
@@ -37,11 +38,19 @@ InputImage _testImage() {
 
 void main() {
   test(
-    'detector is lazy, created once per camera run, and closed on stop',
+    'startup and background stop do not initialize ML Kit or create detector',
     () async {
+      var initializationCount = 0;
       var creationCount = 0;
       final detector = _FakeDetector();
+      final initializer = MlKitInitializer(
+        requiresNativeInitialization: true,
+        initializeNative: () async {
+          initializationCount++;
+        },
+      );
       final lifecycle = FaceDetectorLifecycle(
+        initializer: initializer,
         factory: () {
           creationCount++;
           return detector;
@@ -49,12 +58,15 @@ void main() {
       );
 
       expect(creationCount, 0);
+      expect(initializationCount, 0);
       expect(lifecycle.isStarted, isFalse);
       await lifecycle.stop();
       expect(creationCount, 0);
+      expect(initializationCount, 0);
 
-      expect(lifecycle.start(), isTrue);
-      expect(lifecycle.start(), isTrue);
+      expect(await lifecycle.start(), isTrue);
+      expect(await lifecycle.start(), isTrue);
+      expect(initializationCount, 1);
       expect(creationCount, 1);
       await lifecycle.processImage(_testImage());
       expect(detector.processCalls, 1);
@@ -68,16 +80,24 @@ void main() {
   test(
     'processing failure closes once and blocks recreate until user retry',
     () async {
+      var initializationCount = 0;
       var creationCount = 0;
       final failing = _FakeDetector(
         processingError: StateError('ML Kit failed'),
       );
       final recovered = _FakeDetector();
+      final initializer = MlKitInitializer(
+        requiresNativeInitialization: true,
+        initializeNative: () async {
+          initializationCount++;
+        },
+      );
       final lifecycle = FaceDetectorLifecycle(
+        initializer: initializer,
         factory: () => creationCount++ == 0 ? failing : recovered,
       );
 
-      expect(lifecycle.start(), isTrue);
+      expect(await lifecycle.start(), isTrue);
       await expectLater(
         lifecycle.processImage(_testImage()),
         throwsA(isA<StateError>()),
@@ -85,14 +105,72 @@ void main() {
       expect(lifecycle.isFaulted, isTrue);
       expect(lifecycle.isStarted, isFalse);
       expect(failing.closeCalls, 1);
-      expect(lifecycle.start(), isFalse);
+      expect(await lifecycle.start(), isFalse);
       expect(creationCount, 1);
 
       lifecycle.allowRetry();
-      expect(lifecycle.start(), isTrue);
+      expect(await lifecycle.start(), isTrue);
+      expect(initializationCount, 1);
       expect(creationCount, 2);
       await lifecycle.stop();
       expect(recovered.closeCalls, 1);
+    },
+  );
+
+  test('camera demand initializes once before creating the detector', () async {
+    final events = <String>[];
+    final detector = _FakeDetector();
+    final initializer = MlKitInitializer(
+      requiresNativeInitialization: true,
+      initializeNative: () async {
+        events.add('initialize');
+      },
+    );
+    final lifecycle = FaceDetectorLifecycle(
+      initializer: initializer,
+      factory: () {
+        events.add('create detector');
+        return detector;
+      },
+    );
+
+    final starts = await Future.wait([lifecycle.start(), lifecycle.start()]);
+
+    expect(starts, everyElement(isTrue));
+    expect(events, ['initialize', 'create detector']);
+    expect(initializer.state, MlKitInitializationState.initialized);
+    await lifecycle.stop();
+  });
+
+  test(
+    'ML Kit initialization failure prevents detector creation and locks retries',
+    () async {
+      var initializationCount = 0;
+      var creationCount = 0;
+      final initializer = MlKitInitializer(
+        requiresNativeInitialization: true,
+        initializeNative: () async {
+          initializationCount++;
+          throw StateError('Google services unavailable');
+        },
+      );
+      final lifecycle = FaceDetectorLifecycle(
+        initializer: initializer,
+        factory: () {
+          creationCount++;
+          return _FakeDetector();
+        },
+      );
+
+      expect(await lifecycle.start(), isFalse);
+      expect(await lifecycle.start(), isFalse);
+      expect(initializationCount, 1);
+      expect(creationCount, 0);
+      expect(lifecycle.isStarted, isFalse);
+      expect(lifecycle.isFaulted, isTrue);
+      expect(initializer.state, MlKitInitializationState.failedForSession);
+      await lifecycle.stop();
+      expect(initializationCount, 1);
     },
   );
 }

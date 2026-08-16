@@ -11,6 +11,7 @@ import 'package:postureguard/services/camera_privacy_service.dart';
 import 'package:postureguard/services/device_screen_time_service.dart';
 import 'package:postureguard/services/monitoring_service.dart';
 import 'package:postureguard/services/preferences_service.dart';
+import 'package:postureguard/widgets/coach_mark_overlay.dart';
 import 'package:postureguard/widgets/no_stretch_scroll_behavior.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
@@ -167,6 +168,57 @@ Future<void> _bringIntoView(WidgetTester tester, Finder finder) async {
     );
     await tester.pumpAndSettle();
   }
+}
+
+Future<void> _openPrivacyTourAndReturnToCamera(
+  WidgetTester tester, {
+  bool tapTarget = false,
+}) async {
+  const privacyCopy =
+      'Camera assistance is optional. Before enabling it, read Privacy & PDPA '
+      'to see how the camera and your data are handled.';
+  const cameraCopy =
+      'You can turn on camera assistance for extra posture detection, or skip '
+      'this step and continue using phone sensors only.';
+
+  expect(find.text(privacyCopy), findsOneWidget);
+  final privacyTile = find.byKey(const Key('cameraPrivacySettingsTile'));
+  final overlayFinder = find.byType(CoachMarkOverlay);
+  final privacyOverlay = tester.widget<CoachMarkOverlay>(overlayFinder);
+  final privacyTarget = privacyOverlay.target!;
+  final privacyRect = tester.getRect(privacyTile);
+  expect(privacyTarget.overlaps(privacyRect), isTrue);
+  expect(privacyTarget.size, privacyRect.size);
+  expect((privacyTarget.center - privacyRect.center).distance, lessThan(20));
+
+  if (tapTarget) {
+    await tester.tap(privacyTile);
+  } else {
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+  }
+  await tester.pumpAndSettle();
+
+  expect(find.text('Privacy & PDPA'), findsOneWidget);
+  expect(find.text('Camera use'), findsOneWidget);
+  expect(find.byType(CoachMarkOverlay), findsNothing);
+
+  await tester.pageBack();
+  await tester.pumpAndSettle();
+
+  expect(find.text(cameraCopy), findsOneWidget);
+  final cameraSwitch = find.byKey(const Key('cameraAssistEnabledSwitch'));
+  final cameraOverlay = tester.widget<CoachMarkOverlay>(overlayFinder);
+  final cameraTarget = cameraOverlay.target!;
+  final cameraRect = tester.getRect(cameraSwitch);
+  expect(cameraTarget.overlaps(cameraRect), isTrue);
+  expect(cameraTarget.size, cameraRect.size);
+  expect((cameraTarget.center - cameraRect.center).distance, lessThan(20));
+}
+
+Future<void> _skipCameraTourStep(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('settingsTourSkipButton')));
+  await tester.pumpAndSettle();
+  expect(find.text('Turn posture tracking on or off.'), findsOneWidget);
 }
 
 void main() {
@@ -330,6 +382,244 @@ void main() {
           )
           .value,
       isTrue,
+    );
+  });
+
+  testWidgets(
+    'Settings tour opens real privacy page then camera Skip changes nothing',
+    (tester) async {
+      final sharedPreferences = SharedPreferencesAsync();
+      final gateway = _FakeCameraPermissionGateway();
+      final coordinator = CameraAssistPermissionCoordinator(
+        preferences: CameraPrivacyPreferences(preferences: sharedPreferences),
+        permissionGateway: gateway,
+        sharedPreferences: sharedPreferences,
+      );
+
+      await tester.pumpWidget(
+        _settingsApp(
+          _FakeSettingsStore(AppSettings.defaults),
+          showGuidedTour: true,
+          screenTimeProvider: _FakeScreenTimeProvider()..supported = false,
+          loadNotificationPermission: () async =>
+              NotificationPermission.granted,
+          cameraCoordinator: coordinator,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _openPrivacyTourAndReturnToCamera(tester, tapTarget: true);
+      expect(gateway.requestCalls, 0);
+
+      await _skipCameraTourStep(tester);
+
+      expect(gateway.requestCalls, 0);
+      expect(
+        await sharedPreferences.getBool(
+          PreferenceKeys.cameraPrivacyNoticeAcknowledged,
+        ),
+        isNull,
+      );
+      expect(
+        await sharedPreferences.getBool(PreferenceKeys.cameraAssistEnabled),
+        isNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'Settings tour enables camera through the existing consent flow',
+    (tester) async {
+      final sharedPreferences = SharedPreferencesAsync();
+      final gateway = _FakeCameraPermissionGateway(
+        requestResult: CameraPermissionState.granted,
+      );
+      final coordinator = CameraAssistPermissionCoordinator(
+        preferences: CameraPrivacyPreferences(preferences: sharedPreferences),
+        permissionGateway: gateway,
+        sharedPreferences: sharedPreferences,
+      );
+
+      await tester.pumpWidget(
+        _settingsApp(
+          _FakeSettingsStore(AppSettings.defaults),
+          showGuidedTour: true,
+          screenTimeProvider: _FakeScreenTimeProvider()..supported = false,
+          loadNotificationPermission: () async =>
+              NotificationPermission.granted,
+          cameraCoordinator: coordinator,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openPrivacyTourAndReturnToCamera(tester);
+
+      expect(gateway.requestCalls, 0);
+      await tester.tap(find.byKey(const Key('cameraAssistEnabledSwitch')));
+      await tester.pumpAndSettle();
+      expect(find.text('Camera assistance'), findsOneWidget);
+      expect(gateway.requestCalls, 0);
+
+      await tester.tap(
+        find.byKey(const Key('cameraExplanationContinueButton')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(gateway.requestCalls, 1);
+      expect(
+        await sharedPreferences.getBool(PreferenceKeys.cameraAssistEnabled),
+        isTrue,
+      );
+      expect(find.text('Turn posture tracking on or off.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Not now on the camera tutorial continues with sensors', (
+    tester,
+  ) async {
+    final sharedPreferences = SharedPreferencesAsync();
+    final gateway = _FakeCameraPermissionGateway();
+    final coordinator = CameraAssistPermissionCoordinator(
+      preferences: CameraPrivacyPreferences(preferences: sharedPreferences),
+      permissionGateway: gateway,
+      sharedPreferences: sharedPreferences,
+    );
+
+    await tester.pumpWidget(
+      _settingsApp(
+        _FakeSettingsStore(AppSettings.defaults),
+        showGuidedTour: true,
+        screenTimeProvider: _FakeScreenTimeProvider()..supported = false,
+        loadMonitoringState: () async => true,
+        loadNotificationPermission: () async => NotificationPermission.granted,
+        cameraCoordinator: coordinator,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openPrivacyTourAndReturnToCamera(tester);
+
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Camera assistance'), findsOneWidget);
+    expect(gateway.requestCalls, 0);
+
+    await tester.tap(find.byKey(const Key('cameraExplanationNotNowButton')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.requestCalls, 0);
+    expect(find.text('Turn posture tracking on or off.'), findsOneWidget);
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const Key('monitoringEnabledSwitch')),
+          )
+          .value,
+      isTrue,
+    );
+  });
+
+  testWidgets(
+    'replay recognizes configured camera and screen time without resetting them',
+    (tester) async {
+      final sharedPreferences = SharedPreferencesAsync();
+      await sharedPreferences.setBool(
+        PreferenceKeys.cameraPrivacyNoticeAcknowledged,
+        true,
+      );
+      await sharedPreferences.setBool(PreferenceKeys.cameraAssistEnabled, true);
+      final gateway = _FakeCameraPermissionGateway()
+        ..current = CameraPermissionState.granted;
+      final coordinator = CameraAssistPermissionCoordinator(
+        preferences: CameraPrivacyPreferences(preferences: sharedPreferences),
+        permissionGateway: gateway,
+        sharedPreferences: sharedPreferences,
+      );
+      final screenTime = _FakeScreenTimeProvider()..hasAccess = true;
+
+      await tester.pumpWidget(
+        _settingsApp(
+          _FakeSettingsStore(AppSettings.defaults),
+          showGuidedTour: true,
+          screenTimeProvider: screenTime,
+          loadNotificationPermission: () async =>
+              NotificationPermission.granted,
+          cameraCoordinator: coordinator,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openPrivacyTourAndReturnToCamera(tester);
+
+      expect(find.text('Continue'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+      await tester.pumpAndSettle();
+      expect(gateway.requestCalls, 0);
+
+      await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Show your screen time'), findsNothing);
+      expect(
+        find.text('Choose how long Posture Guard waits before reminding you.'),
+        findsOneWidget,
+      );
+      expect(
+        await sharedPreferences.getBool(
+          PreferenceKeys.cameraPrivacyNoticeAcknowledged,
+        ),
+        isTrue,
+      );
+      expect(
+        await sharedPreferences.getBool(PreferenceKeys.cameraAssistEnabled),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets('Settings tour completes without camera or screen-time access', (
+    tester,
+  ) async {
+    final sharedPreferences = SharedPreferencesAsync();
+    final gateway = _FakeCameraPermissionGateway();
+    final coordinator = CameraAssistPermissionCoordinator(
+      preferences: CameraPrivacyPreferences(preferences: sharedPreferences),
+      permissionGateway: gateway,
+      sharedPreferences: sharedPreferences,
+    );
+    final screenTime = _FakeScreenTimeProvider();
+
+    await tester.pumpWidget(
+      _settingsApp(
+        _FakeSettingsStore(AppSettings.defaults),
+        showGuidedTour: true,
+        screenTimeProvider: screenTime,
+        loadNotificationPermission: () async => NotificationPermission.granted,
+        cameraCoordinator: coordinator,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openPrivacyTourAndReturnToCamera(tester);
+    await _skipCameraTourStep(tester);
+
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('Show your screen time'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('settingsTourSkipButton')));
+    await tester.pumpAndSettle();
+
+    for (var remainingStep = 0; remainingStep < 4; remainingStep++) {
+      await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.byType(CoachMarkOverlay), findsNothing);
+    expect(gateway.requestCalls, 0);
+    expect(screenTime.settingsOpens, 0);
+    expect(
+      await sharedPreferences.getBool(PreferenceKeys.cameraAssistEnabled),
+      isNull,
     );
   });
 
@@ -907,6 +1197,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _openPrivacyTourAndReturnToCamera(tester, tapTarget: true);
+    await _skipCameraTourStep(tester);
+
     expect(find.text('Turn posture tracking on or off.'), findsOneWidget);
     await tester.tap(find.byKey(const Key('settingsTourNextButton')));
     await tester.pumpAndSettle();
@@ -942,6 +1235,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _openPrivacyTourAndReturnToCamera(tester);
+    await _skipCameraTourStep(tester);
     await tester.tap(find.byKey(const Key('settingsTourNextButton')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('settingsTourNextButton')));
@@ -949,7 +1244,11 @@ void main() {
 
     expect(find.text('Show your screen time'), findsOneWidget);
     expect(
-      find.text("Allow access to show today's total phone screen time."),
+      find.text(
+        "Screen-time access is optional. Allow it to show today's total "
+        "phone screen time, or skip and use Posture Guard's monitored-time "
+        'fallback.',
+      ),
       findsOneWidget,
     );
     expect(provider.settingsOpens, 0);
@@ -988,6 +1287,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(requests, 0);
+      await _openPrivacyTourAndReturnToCamera(tester);
+      await _skipCameraTourStep(tester);
       await tester.tap(find.byKey(const Key('settingsTourNextButton')));
       await tester.pumpAndSettle();
       expect(find.text('Allow notifications'), findsWidgets);
@@ -1016,6 +1317,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _openPrivacyTourAndReturnToCamera(tester);
+    await _skipCameraTourStep(tester);
     await tester.tap(find.byKey(const Key('settingsTourNextButton')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('settingsTourNextButton')));
@@ -1048,7 +1351,26 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('เปิดหรือปิดการตรวจท่าทาง'), findsOneWidget);
+    expect(
+      find.text(
+        'การช่วยตรวจท่าด้วยกล้องเป็นทางเลือก ก่อนเปิดใช้งาน '
+        'โปรดอ่านความเป็นส่วนตัวและ PDPA '
+        'เพื่อดูวิธีใช้กล้องและจัดการข้อมูลของคุณ',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('cameraPrivacySettingsTile')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('deleteMyDataButton')), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'คุณสามารถเปิดกล้องเพื่อช่วยตรวจจับท่าทางเพิ่มเติม '
+        'หรือข้ามขั้นตอนนี้และใช้เฉพาะเซ็นเซอร์ของโทรศัพท์ต่อไปได้',
+      ),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 }

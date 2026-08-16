@@ -431,8 +431,26 @@ abstract class AppLocalizations {
   /// No description provided for @screenTimeTourBody.
   ///
   /// In en, this message translates to:
-  /// **'Allow access to show today\'s total phone screen time.'**
+  /// **'Screen-time access is optional. Allow it to show today\'s total phone screen time, or skip and use Posture Guard\'s monitored-time fallback.'**
   String get screenTimeTourBody;
+
+  /// No description provided for @settingsTourPrivacyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera assistance is optional. Before enabling it, read Privacy & PDPA to see how the camera and your data are handled.'**
+  String get settingsTourPrivacyBody;
+
+  /// No description provided for @settingsTourCameraBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can turn on camera assistance for extra posture detection, or skip this step and continue using phone sensors only.'**
+  String get settingsTourCameraBody;
+
+  /// No description provided for @turnOnCameraAssistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on camera assistance'**
+  String get turnOnCameraAssistance;
 
   /// No description provided for @helpTooltip.
   ///

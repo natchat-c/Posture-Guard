@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
+import com.google.mlkit.common.MlKit
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
@@ -15,13 +16,24 @@ import kotlin.math.max
 
 class MainActivity : FlutterActivity() {
     private companion object {
-        const val CHANNEL = "postureguard/device_screen_time"
+        const val DEVICE_SCREEN_TIME_CHANNEL = "postureguard/device_screen_time"
+        const val ML_KIT_CHANNEL = "postureguard/ml_kit"
         const val EVENT_LOOKBACK_MILLIS = 24L * 60L * 60L * 1000L
+
+        enum class MlKitInitializationState {
+            NOT_INITIALIZED,
+            INITIALIZING,
+            INITIALIZED,
+            FAILED_FOR_SESSION,
+        }
+
+        @Volatile
+        private var mlKitInitializationState = MlKitInitializationState.NOT_INITIALIZED
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_SCREEN_TIME_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "isUsageAccessSupported" ->
@@ -47,6 +59,41 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                     else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ML_KIT_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method != "initializeMlKit") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                when (mlKitInitializationState) {
+                    MlKitInitializationState.INITIALIZED -> result.success(true)
+                    MlKitInitializationState.FAILED_FOR_SESSION ->
+                        result.error(
+                            "mlkit_unavailable",
+                            "ML Kit initialization already failed in this app session.",
+                            null,
+                        )
+                    MlKitInitializationState.INITIALIZING ->
+                        result.error(
+                            "mlkit_initializing",
+                            "ML Kit initialization is already in progress.",
+                            null,
+                        )
+                    MlKitInitializationState.NOT_INITIALIZED -> {
+                        mlKitInitializationState = MlKitInitializationState.INITIALIZING
+                        try {
+                            MlKit.initialize(applicationContext)
+                            mlKitInitializationState = MlKitInitializationState.INITIALIZED
+                            result.success(true)
+                        } catch (error: Throwable) {
+                            mlKitInitializationState =
+                                MlKitInitializationState.FAILED_FOR_SESSION
+                            result.error("mlkit_initialization_failed", error.message, null)
+                        }
+                    }
                 }
             }
     }

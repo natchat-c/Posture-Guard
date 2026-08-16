@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
+import 'mlkit_initializer.dart';
+
 abstract interface class FaceDetectorClient {
   Future<List<Face>> processImage(InputImage image);
 
@@ -32,20 +34,41 @@ class MlKitFaceDetectorClient implements FaceDetectorClient {
 typedef FaceDetectorClientFactory = FaceDetectorClient Function();
 
 class FaceDetectorLifecycle {
-  FaceDetectorLifecycle({FaceDetectorClientFactory? factory})
-    : _factory = factory ?? MlKitFaceDetectorClient.new;
+  FaceDetectorLifecycle({
+    FaceDetectorClientFactory? factory,
+    MlKitInitialization? initializer,
+  }) : _factory = factory ?? MlKitFaceDetectorClient.new,
+       _initializer = initializer ?? MlKitInitializer.instance;
 
   final FaceDetectorClientFactory _factory;
+  final MlKitInitialization _initializer;
   FaceDetectorClient? _detector;
   bool _faulted = false;
+  Future<bool>? _startInFlight;
 
   bool get isStarted => _detector != null;
 
   bool get isFaulted => _faulted;
 
-  bool start() {
-    if (_faulted) return false;
-    if (_detector != null) return true;
+  Future<bool> start() {
+    if (_faulted) return Future<bool>.value(false);
+    if (_detector != null) return Future<bool>.value(true);
+    final existing = _startInFlight;
+    if (existing != null) return existing;
+
+    late final Future<bool> operation;
+    operation = _startOnce().whenComplete(() {
+      if (identical(_startInFlight, operation)) _startInFlight = null;
+    });
+    _startInFlight = operation;
+    return operation;
+  }
+
+  Future<bool> _startOnce() async {
+    if (!await _initializer.initialize()) {
+      _faulted = true;
+      return false;
+    }
     try {
       _detector = _factory();
       return true;

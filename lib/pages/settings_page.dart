@@ -20,6 +20,8 @@ import 'privacy_settings_page.dart';
 enum SettingsTourResult { completed, back, skipped, dataDeleted }
 
 enum _SettingsTourItem {
+  privacy,
+  camera,
   monitoring,
   notifications,
   screenTime,
@@ -90,6 +92,8 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
   final TextEditingController _customDelayController = TextEditingController();
   final TextEditingController _customFrequencyController =
       TextEditingController();
+  final GlobalKey _privacyTourKey = GlobalKey();
+  final GlobalKey _cameraTourKey = GlobalKey();
   final GlobalKey _monitoringTourKey = GlobalKey();
   final GlobalKey _notificationsTourKey = GlobalKey();
   final GlobalKey _screenTimeTourKey = GlobalKey();
@@ -231,6 +235,9 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
 
   Future<void> _setCameraAssistEnabled(bool enabled) async {
     if (_cameraAssistChanging) return;
+    final advanceCameraTour =
+        enabled && _currentGuidedTourItem == _SettingsTourItem.camera;
+    var cameraChoiceFinished = false;
     setState(() => _cameraAssistChanging = true);
     try {
       if (!enabled) {
@@ -243,9 +250,13 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
       if (await _cameraCoordinator.needsExplanation()) {
         if (!mounted) return;
         final proceed = await showCameraPermissionExplanationDialog(context);
-        if (!proceed) return;
+        if (!proceed) {
+          cameraChoiceFinished = true;
+          return;
+        }
       }
       final result = await _cameraCoordinator.enableAfterExplanation();
+      cameraChoiceFinished = true;
       await widget.onCameraAssistChanged?.call(result.enabled);
       if (!mounted) return;
       setState(() => _cameraAssistEnabled = result.enabled);
@@ -267,11 +278,20 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
       );
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     } finally {
-      if (mounted) setState(() => _cameraAssistChanging = false);
+      if (mounted) {
+        setState(() => _cameraAssistChanging = false);
+        if (advanceCameraTour &&
+            cameraChoiceFinished &&
+            _currentGuidedTourItem == _SettingsTourItem.camera) {
+          _moveGuidedTour(1);
+        }
+      }
     }
   }
 
   Future<void> _openPrivacySettings() async {
+    final advancePrivacyTour =
+        _currentGuidedTourItem == _SettingsTourItem.privacy;
     final result = await Navigator.push<PrivacySettingsResult>(
       context,
       MaterialPageRoute(
@@ -294,6 +314,11 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
       Navigator.pop(context, SettingsTourResult.dataDeleted);
     } else {
       await _refreshCameraAssist();
+      if (mounted &&
+          advancePrivacyTour &&
+          _currentGuidedTourItem == _SettingsTourItem.privacy) {
+        _moveGuidedTour(1);
+      }
     }
   }
 
@@ -587,6 +612,8 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
     }
     _guidedTourStarted = true;
     _guidedTourItems = [
+      _SettingsTourItem.privacy,
+      _SettingsTourItem.camera,
       _SettingsTourItem.monitoring,
       _SettingsTourItem.notifications,
       if (_screenTimeSupported && !_hasUsageAccess)
@@ -604,6 +631,8 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
 
   GlobalKey? _guidedTourKey(_SettingsTourItem? item) {
     return switch (item) {
+      _SettingsTourItem.privacy => _privacyTourKey,
+      _SettingsTourItem.camera => _cameraTourKey,
       _SettingsTourItem.monitoring => _monitoringTourKey,
       _SettingsTourItem.notifications => _notificationsTourKey,
       _SettingsTourItem.screenTime => _screenTimeTourKey,
@@ -667,7 +696,8 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
   }
 
   void _skipGuidedTourItem() {
-    if (_currentGuidedTourItem == _SettingsTourItem.screenTime) {
+    if (_currentGuidedTourItem == _SettingsTourItem.camera ||
+        _currentGuidedTourItem == _SettingsTourItem.screenTime) {
       _moveGuidedTour(1);
     } else {
       _finishGuidedTour(SettingsTourResult.skipped);
@@ -683,6 +713,14 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
   (String, String) _guidedTourCopy(_SettingsTourItem item) {
     final l10n = context.l10n;
     return switch (item) {
+      _SettingsTourItem.privacy => (
+        l10n.cameraAndPrivacy,
+        l10n.settingsTourPrivacyBody,
+      ),
+      _SettingsTourItem.camera => (
+        l10n.cameraAssistTitle,
+        l10n.settingsTourCameraBody,
+      ),
       _SettingsTourItem.monitoring => (
         l10n.monitoringEnabledSetting,
         l10n.settingsTourEnabledBody,
@@ -1187,33 +1225,39 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
                               ),
                             ),
                             const Divider(height: 36),
-                            SwitchListTile(
-                              key: const Key('cameraAssistEnabledSwitch'),
-                              contentPadding: EdgeInsets.zero,
-                              secondary: const Icon(
-                                Icons.camera_front_outlined,
+                            KeyedSubtree(
+                              key: _cameraTourKey,
+                              child: SwitchListTile(
+                                key: const Key('cameraAssistEnabledSwitch'),
+                                contentPadding: EdgeInsets.zero,
+                                secondary: const Icon(
+                                  Icons.camera_front_outlined,
+                                ),
+                                title: Text(l10n.cameraAssistTitle),
+                                subtitle: Text(
+                                  l10n.cameraAssistSettingDescription,
+                                ),
+                                value: _cameraAssistEnabled,
+                                onChanged:
+                                    _saving ||
+                                        _cameraAssistChanging ||
+                                        _changingMonitoringState
+                                    ? null
+                                    : _setCameraAssistEnabled,
                               ),
-                              title: Text(l10n.cameraAssistTitle),
-                              subtitle: Text(
-                                l10n.cameraAssistSettingDescription,
-                              ),
-                              value: _cameraAssistEnabled,
-                              onChanged:
-                                  _saving ||
-                                      _cameraAssistChanging ||
-                                      _changingMonitoringState
-                                  ? null
-                                  : _setCameraAssistEnabled,
                             ),
-                            ListTile(
-                              key: const Key('cameraPrivacySettingsTile'),
-                              contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Icons.privacy_tip_outlined),
-                              title: Text(l10n.cameraAndPrivacy),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: _cameraAssistChanging || _saving
-                                  ? null
-                                  : _openPrivacySettings,
+                            KeyedSubtree(
+                              key: _privacyTourKey,
+                              child: ListTile(
+                                key: const Key('cameraPrivacySettingsTile'),
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.privacy_tip_outlined),
+                                title: Text(l10n.cameraAndPrivacy),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: _cameraAssistChanging || _saving
+                                    ? null
+                                    : _openPrivacySettings,
+                              ),
                             ),
                           ],
                         ),
@@ -1234,6 +1278,8 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
       (_) => _prepareGuidedTourTarget(),
     );
     final copy = _guidedTourCopy(guidedTourItem);
+    final isPrivacy = guidedTourItem == _SettingsTourItem.privacy;
+    final isCamera = guidedTourItem == _SettingsTourItem.camera;
     final isScreenTime = guidedTourItem == _SettingsTourItem.screenTime;
     final needsNotificationPermission =
         guidedTourItem == _SettingsTourItem.notifications &&
@@ -1251,7 +1297,13 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
             currentStep: guidedTourIndex,
             totalSteps: _guidedTourItems.length,
             backLabel: l10n.back,
-            nextLabel: needsNotificationPermission
+            nextLabel: isPrivacy
+                ? l10n.open
+                : isCamera
+                ? (_cameraAssistEnabled
+                      ? l10n.continueLabel
+                      : l10n.turnOnCameraAssistance)
+                : needsNotificationPermission
                 ? l10n.allowNotifications
                 : isScreenTime
                 ? l10n.allow
@@ -1260,7 +1312,15 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
                 : l10n.next,
             skipLabel: l10n.skip,
             onBack: () => _moveGuidedTour(-1),
-            onNext: needsNotificationPermission
+            onNext: isPrivacy
+                ? _openPrivacySettings
+                : isCamera
+                ? (_cameraAssistChanging
+                      ? null
+                      : _cameraAssistEnabled
+                      ? () => _moveGuidedTour(1)
+                      : () => _setCameraAssistEnabled(true))
+                : needsNotificationPermission
                 ? (_checkingNotificationPermission ||
                           _notificationPermissionAttempted
                       ? null

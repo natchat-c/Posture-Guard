@@ -189,7 +189,18 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get screenTimeTourBody =>
-      'อนุญาตเพื่อแสดงเวลาที่ใช้หน้าจอโทรศัพท์วันนี้';
+      'การเข้าถึงเวลาหน้าจอเป็นทางเลือก คุณสามารถอนุญาตเพื่อแสดงเวลาใช้งานหน้าจอรวมของวันนี้ หรือข้ามและใช้เวลาที่ Posture Guard ตรวจวัดแทนได้';
+
+  @override
+  String get settingsTourPrivacyBody =>
+      'การช่วยตรวจท่าด้วยกล้องเป็นทางเลือก ก่อนเปิดใช้งาน โปรดอ่านความเป็นส่วนตัวและ PDPA เพื่อดูวิธีใช้กล้องและจัดการข้อมูลของคุณ';
+
+  @override
+  String get settingsTourCameraBody =>
+      'คุณสามารถเปิดกล้องเพื่อช่วยตรวจจับท่าทางเพิ่มเติม หรือข้ามขั้นตอนนี้และใช้เฉพาะเซ็นเซอร์ของโทรศัพท์ต่อไปได้';
+
+  @override
+  String get turnOnCameraAssistance => 'เปิดการช่วยตรวจท่าด้วยกล้อง';
 
   @override
   String get helpTooltip => 'วิธีใช้งาน Posture Guard';

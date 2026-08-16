@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:postureguard/l10n/app_localizations.dart';
 import 'package:postureguard/pages/home_page.dart';
+import 'package:postureguard/services/face_detector_lifecycle.dart';
+import 'package:postureguard/services/mlkit_initializer.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
@@ -13,6 +15,7 @@ Widget _home({
   bool monitoringActive = true,
   int coinBalance = 0,
   bool cameraActive = false,
+  FaceDetectorLifecycle? faceDetectorLifecycle,
 }) {
   return MaterialApp(
     locale: locale,
@@ -26,6 +29,7 @@ Widget _home({
       initialCoinBalance: coinBalance,
       initialCameraAssistEnabled: cameraActive,
       initialCameraActive: cameraActive,
+      faceDetectorLifecycle: faceDetectorLifecycle,
     ),
   );
 }
@@ -57,6 +61,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('cameraActiveIndicator')), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sensor-only startup and backgrounding never initialize ML Kit', (
+    tester,
+  ) async {
+    var initializationCount = 0;
+    var detectorCreationCount = 0;
+    final initializer = MlKitInitializer(
+      requiresNativeInitialization: true,
+      initializeNative: () async {
+        initializationCount++;
+      },
+    );
+    final lifecycle = FaceDetectorLifecycle(
+      initializer: initializer,
+      factory: () {
+        detectorCreationCount++;
+        throw StateError('Detector must remain lazy.');
+      },
+    );
+
+    await tester.pumpWidget(
+      _home(
+        status: 'GOOD',
+        monitoringActive: true,
+        faceDetectorLifecycle: lifecycle,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Good posture'), findsOneWidget);
+    expect(initializationCount, 0);
+    expect(detectorCreationCount, 0);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pumpAndSettle();
+
+    expect(initializationCount, 0);
+    expect(detectorCreationCount, 0);
+    expect(find.byKey(const Key('cameraActiveIndicator')), findsNothing);
   });
 
   testWidgets('checking-position copy is absent in English and Thai', (

@@ -115,6 +115,26 @@ void main() {
     await tester.tap(find.byKey(const Key('homeSettingsButton')));
     await tester.pumpAndSettle();
     expect(find.text('Settings'), findsOneWidget);
+    expect(
+      find.text(
+        'Camera assistance is optional. Before enabling it, read Privacy & PDPA to see how the camera and your data are handled.',
+      ),
+      findsOneWidget,
+    );
+
+    await _tapTourNext(tester);
+    expect(find.text('Privacy & PDPA'), findsOneWidget);
+    expect(find.text('Camera use'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'You can turn on camera assistance for extra posture detection, or skip this step and continue using phone sensors only.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('settingsTourSkipButton')));
+    await tester.pumpAndSettle();
     expect(find.text('Turn posture tracking on or off.'), findsOneWidget);
 
     await _tapTourNext(tester);

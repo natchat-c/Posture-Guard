@@ -60,4 +60,7 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // MainActivity invokes MlKit.initialize() after the startup provider is
+    // removed. This is already resolved transitively by face detection.
+    implementation("com.google.mlkit:common:18.11.0")
 }
