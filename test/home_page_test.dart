@@ -45,21 +45,37 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    const stableElementKeys = [
+      'homeTopControls',
+      'homeStatusHeading',
+      'homePostureStatus',
+      'homeScore',
+      'homeCharacterArtwork',
+      'homeTimeMetrics',
+      'homeBottomActions',
+      'homeCustomizeButton',
+      'homeStatisticsButton',
+    ];
+    Map<String, Rect> elementPositions() => {
+      for (final key in stableElementKeys)
+        key: tester.getRect(find.byKey(Key(key))),
+    };
+
     await tester.pumpWidget(_home(status: 'WARNING'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('cameraActiveIndicator')), findsNothing);
+    final hiddenPositions = elementPositions();
 
     await tester.pumpWidget(_home(status: 'WARNING', cameraActive: true));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('cameraActiveIndicator')), findsOneWidget);
-    expect(
-      find.text('Front camera active • Images are not saved'),
-      findsOneWidget,
-    );
+    expect(find.text('Front camera active'), findsOneWidget);
+    expect(elementPositions(), hiddenPositions);
 
     await tester.pumpWidget(_home(status: 'WARNING'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('cameraActiveIndicator')), findsNothing);
+    expect(elementPositions(), hiddenPositions);
     expect(tester.takeException(), isNull);
   });
 

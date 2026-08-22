@@ -787,8 +787,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notNow => 'Not now';
 
   @override
-  String get cameraActiveIndicator =>
-      'Front camera active • Images are not saved';
+  String get cameraActiveIndicator => 'Front camera active';
 
   @override
   String get cameraAndPrivacy => 'Privacy & PDPA';

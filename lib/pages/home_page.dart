@@ -1349,7 +1349,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                             postureMessageBudget +
                             5 +
                             scoreFontSize * 1.15 * textScale +
-                            (_cameraActive ? 34 * textScale : 0) +
                             (_cameraStatusMessage != null ? 32 * textScale : 0);
                         final metricsBudget = max(58.0, 54 * textScale);
                         final imageGap = isShort ? 6.0 : 15.0;
@@ -1388,107 +1387,129 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                             children: [
                               KeyedSubtree(
                                 key: _statusTourKey,
-                                child: SizedBox(
-                                  height: statusBudget,
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    alignment: Alignment.bottomCenter,
-                                    child: SizedBox(
-                                      width: min(
-                                        360,
-                                        middleConstraints.maxWidth,
-                                      ),
-                                      child: Column(
-                                        key: const Key('homeStatusSection'),
-                                        children: [
-                                          Text(
-                                            l10n.status.toUpperCase(),
-                                            key: const Key('homeStatusHeading'),
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              letterSpacing: 1.2,
-                                            ),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    SizedBox(
+                                      height: statusBudget,
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.bottomCenter,
+                                        child: SizedBox(
+                                          width: min(
+                                            360,
+                                            middleConstraints.maxWidth,
                                           ),
-                                          const SizedBox(height: 3),
-                                          ConstrainedBox(
-                                            constraints: const BoxConstraints(
-                                              maxWidth: 360,
-                                            ),
-                                            child: Text(
-                                              _localizedPostureStatus(),
-                                              key: const Key(
-                                                'homePostureStatus',
-                                              ),
-                                              maxLines: 2,
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                fontSize: statusFontSize,
-                                                height: 1.05,
-                                                fontWeight: FontWeight.bold,
-                                                color: _statusColor(),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 5),
-                                          Text(
-                                            l10n.score(
-                                              _stats.dailyScore.round(),
-                                            ),
-                                            key: const Key('homeScore'),
-                                            maxLines: 1,
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontSize: scoreFontSize,
-                                              height: 1.05,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          if (hint.isNotEmpty)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 4,
-                                              ),
-                                              child: Text(
-                                                hint,
+                                          child: Column(
+                                            key: const Key('homeStatusSection'),
+                                            children: [
+                                              Text(
+                                                l10n.status.toUpperCase(),
                                                 key: const Key(
-                                                  'homePostureHint',
+                                                  'homeStatusHeading',
                                                 ),
-                                                maxLines: 2,
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                  letterSpacing: 1.2,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 3),
+                                              ConstrainedBox(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      maxWidth: 360,
+                                                    ),
+                                                child: Text(
+                                                  _localizedPostureStatus(),
+                                                  key: const Key(
+                                                    'homePostureStatus',
+                                                  ),
+                                                  maxLines: 2,
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontSize: statusFontSize,
+                                                    height: 1.05,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: _statusColor(),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 5),
+                                              Text(
+                                                l10n.score(
+                                                  _stats.dailyScore.round(),
+                                                ),
+                                                key: const Key('homeScore'),
+                                                maxLines: 1,
                                                 textAlign: TextAlign.center,
                                                 style: TextStyle(
-                                                  fontSize: helperFontSize,
-                                                  height: 1.1,
+                                                  fontSize: scoreFontSize,
+                                                  height: 1.05,
+                                                  fontWeight: FontWeight.w500,
                                                 ),
                                               ),
-                                            ),
-                                          if (_cameraActive)
-                                            const Padding(
-                                              padding: EdgeInsets.only(top: 6),
-                                              child: CameraActiveIndicator(
-                                                visible: true,
-                                              ),
-                                            ),
-                                          if (_cameraStatusMessage != null)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 5,
-                                              ),
-                                              child: Text(
-                                                _cameraStatusMessage!,
-                                                maxLines: 2,
-                                                textAlign: TextAlign.center,
-                                                style: TextStyle(
-                                                  fontSize: helperFontSize,
-                                                  height: 1.1,
+                                              if (hint.isNotEmpty)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        top: 4,
+                                                      ),
+                                                  child: Text(
+                                                    hint,
+                                                    key: const Key(
+                                                      'homePostureHint',
+                                                    ),
+                                                    maxLines: 2,
+                                                    textAlign: TextAlign.center,
+                                                    style: TextStyle(
+                                                      fontSize: helperFontSize,
+                                                      height: 1.1,
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
-                                            ),
-                                        ],
+                                              if (_cameraStatusMessage != null)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        top: 5,
+                                                      ),
+                                                  child: Text(
+                                                    _cameraStatusMessage!,
+                                                    maxLines: 2,
+                                                    textAlign: TextAlign.center,
+                                                    style: TextStyle(
+                                                      fontSize: helperFontSize,
+                                                      height: 1.1,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                    if (_cameraActive)
+                                      const Positioned.fill(
+                                        child: IgnorePointer(
+                                          child: Align(
+                                            alignment: Alignment.bottomCenter,
+                                            child: FractionalTranslation(
+                                              translation: Offset(0, 1),
+                                              child: Padding(
+                                                padding: EdgeInsets.only(
+                                                  top: 6,
+                                                ),
+                                                child: CameraActiveIndicator(
+                                                  visible: true,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                               SizedBox(height: imageGap),

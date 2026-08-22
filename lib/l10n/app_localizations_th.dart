@@ -771,7 +771,7 @@ class AppLocalizationsTh extends AppLocalizations {
   String get notNow => 'ยังไม่ใช่ตอนนี้';
 
   @override
-  String get cameraActiveIndicator => 'กล้องหน้ากำลังทำงาน • ไม่มีการบันทึกภาพ';
+  String get cameraActiveIndicator => 'กล้องหน้ากำลังทำงาน';
 
   @override
   String get cameraAndPrivacy => 'ความเป็นส่วนตัวและ PDPA';

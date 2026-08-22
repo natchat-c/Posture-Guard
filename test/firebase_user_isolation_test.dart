@@ -12,6 +12,9 @@ void main() {
     expect(first.root, 'users/uid-A');
     expect(second.root, 'users/uid-B');
     expect(first.root, isNot(second.root));
+    expect(first.cosmetics, 'users/uid-A/cosmetics');
+    expect(second.cosmetics, 'users/uid-B/cosmetics');
+    expect(first.cosmetics, isNot(second.cosmetics));
   });
 
   test(
@@ -21,6 +24,7 @@ void main() {
 
       expect(paths.settings, 'users/firebase-user-123/settings');
       expect(paths.coins, 'users/firebase-user-123/coins');
+      expect(paths.cosmetics, 'users/firebase-user-123/cosmetics');
       expect(paths.dailyStatsRoot, 'users/firebase-user-123/daily_stats');
       expect(
         paths.dailyStats('2026-08-15'),

@@ -14,6 +14,8 @@ class UserDatabasePaths {
 
   String get coins => '$root/coins';
 
+  String get cosmetics => '$root/cosmetics';
+
   String get dailyStatsRoot => '$root/daily_stats';
 
   String dailyStats(String dateKey) => '$dailyStatsRoot/$dateKey';
@@ -50,6 +52,10 @@ class UserDatabaseReferenceFactory {
 
   Future<DatabaseReference> coins() {
     return _reference((paths) => paths.coins);
+  }
+
+  Future<DatabaseReference> cosmetics() {
+    return _reference((paths) => paths.cosmetics);
   }
 
   Future<DatabaseReference> dailyStatsRoot() {

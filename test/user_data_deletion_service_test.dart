@@ -60,6 +60,11 @@ void main() {
             PreferenceKeys.localStatisticsState: '{"records":{}}',
             PreferenceKeys.cameraAssistEnabled: true,
             PreferenceKeys.ownedCosmeticIds: <String>['hat-1'],
+            PreferenceKeys.equippedHatId: 'hat-1',
+            PreferenceKeys.equippedEyewearId: 'eyewear-1',
+            PreferenceKeys.equippedHoldingId: 'holding-1',
+            PreferenceKeys.equippedBackId: 'back-1',
+            PreferenceKeys.cosmeticOwnershipPendingSync: true,
           });
       final authClient = _DeletionAuthClient(
         const AuthIdentity('current-user-uid'),

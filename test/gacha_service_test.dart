@@ -108,6 +108,38 @@ class _DelayedCoinRemote implements CoinRemoteStore {
   }
 }
 
+class _UserScopedCosmeticRemote implements CosmeticOwnershipRemoteStore {
+  _UserScopedCosmeticRemote({
+    required this.uid,
+    Map<String, Set<String>>? backingStore,
+    this.online = true,
+  }) : backingStore = backingStore ?? <String, Set<String>>{};
+
+  final String uid;
+  final Map<String, Set<String>> backingStore;
+  bool online;
+
+  Set<String> get ownedIds =>
+      Set.unmodifiable(backingStore.putIfAbsent(uid, () => <String>{}));
+
+  void seed(Set<String> ids) {
+    backingStore[uid] = {...ids};
+  }
+
+  @override
+  Future<Set<String>> load() async {
+    if (!online) throw StateError('offline');
+    return ownedIds;
+  }
+
+  @override
+  Future<Set<String>> merge(Set<String> localOwnedIds) async {
+    if (!online) throw StateError('offline');
+    backingStore.putIfAbsent(uid, () => <String>{}).addAll(localOwnedIds);
+    return ownedIds;
+  }
+}
+
 Widget _app(Widget home) {
   return MaterialApp(
     supportedLocales: AppLocalizations.supportedLocales,
@@ -327,6 +359,129 @@ void main() {
     },
   );
 
+  test(
+    'offline draw survives restart and later syncs to its authenticated UID',
+    () async {
+      final preferences = SharedPreferencesAsync();
+      final remote = _UserScopedCosmeticRemote(uid: 'uid-A', online: false);
+      final cosmetics = CosmeticRepository(
+        preferences: preferences,
+        remoteStore: remote,
+      );
+      final result = await GachaShopService(
+        coinStore: _MemoryCoinStore(500),
+        cosmeticStore: cosmetics,
+        gachaService: GachaService(
+          randomSource: _SequenceRandom(doubles: [0.90], integers: [3]),
+        ),
+      ).openBox(GachaBoxType.standard);
+
+      expect(result.item?.id, 'magic_wand');
+      await cosmetics.synchronize();
+      expect(remote.ownedIds, isEmpty);
+
+      final reopened = CosmeticRepository(
+        preferences: preferences,
+        remoteStore: remote,
+      );
+      expect(await reopened.loadOwnedIds(), contains('magic_wand'));
+      await reopened.synchronize();
+
+      remote.online = true;
+      await reopened.synchronize();
+      expect(remote.ownedIds, contains('magic_wand'));
+      expect(remote.ownedIds, containsAll(CosmeticCatalog.starterIds));
+    },
+  );
+
+  test(
+    'stale cloud ownership is repaired without removing local items',
+    () async {
+      final preferences = SharedPreferencesAsync();
+      await preferences.setInt(
+        PreferenceKeys.cosmeticEconomyVersion,
+        CosmeticRepository.currentEconomyVersion,
+      );
+      await preferences.setStringList(PreferenceKeys.ownedCosmeticIds, [
+        ...CosmeticCatalog.starterIds,
+        'magic_wand',
+      ]);
+      await preferences.setBool(
+        PreferenceKeys.cosmeticOwnershipPendingSync,
+        false,
+      );
+      final remote = _UserScopedCosmeticRemote(uid: 'uid-A')
+        ..seed({'glasses2'});
+      final repository = CosmeticRepository(
+        preferences: preferences,
+        remoteStore: remote,
+      );
+
+      await repository.synchronize();
+
+      final ownedIds = await repository.loadOwnedIds();
+      expect(ownedIds, containsAll({'magic_wand', 'glasses2'}));
+      expect(remote.ownedIds, containsAll({'magic_wand', 'glasses2'}));
+    },
+  );
+
+  test(
+    'cloud union restores an owned item to an existing local user',
+    () async {
+      final preferences = SharedPreferencesAsync();
+      await preferences.setInt(
+        PreferenceKeys.cosmeticEconomyVersion,
+        CosmeticRepository.currentEconomyVersion,
+      );
+      await preferences.setStringList(
+        PreferenceKeys.ownedCosmeticIds,
+        CosmeticCatalog.starterIds.toList(),
+      );
+      await preferences.setBool(
+        PreferenceKeys.cosmeticOwnershipPendingSync,
+        false,
+      );
+      final remote = _UserScopedCosmeticRemote(uid: 'uid-A')
+        ..seed({'dragon_wings'});
+      final repository = CosmeticRepository(
+        preferences: preferences,
+        remoteStore: remote,
+      );
+
+      await repository.synchronize();
+      remote.online = false;
+
+      final reopened = CosmeticRepository(
+        preferences: preferences,
+        remoteStore: remote,
+      );
+      expect(await reopened.loadOwnedIds(), contains('dragon_wings'));
+    },
+  );
+
+  test(
+    'different authenticated UIDs keep separate cosmetic ownership',
+    () async {
+      final backingStore = <String, Set<String>>{};
+      final first = _UserScopedCosmeticRemote(
+        uid: 'uid-A',
+        backingStore: backingStore,
+      );
+      final second = _UserScopedCosmeticRemote(
+        uid: 'uid-B',
+        backingStore: backingStore,
+      );
+
+      await first.merge({'magic_wand'});
+      await second.merge({'dragon_wings'});
+
+      expect(first.ownedIds, contains('magic_wand'));
+      expect(first.ownedIds, isNot(contains('dragon_wings')));
+      expect(second.ownedIds, contains('dragon_wings'));
+      expect(second.ownedIds, isNot(contains('magic_wand')));
+    },
+  );
+
   test('an in-flight cloud read cannot restore coins spent locally', () async {
     final preferences = SharedPreferencesAsync();
     const initial = CoinState(totalCoins: 500);
@@ -377,6 +532,51 @@ void main() {
       expect((await cosmetics.loadOwnedIds()).length, before);
     },
   );
+
+  test('duplicate keeps one ownership entry and persists its refund', () async {
+    final preferences = SharedPreferencesAsync();
+    final cosmeticRemote = _UserScopedCosmeticRemote(
+      uid: 'uid-A',
+      online: false,
+    );
+    final cosmetics = CosmeticRepository(
+      preferences: preferences,
+      remoteStore: cosmeticRemote,
+    );
+    await cosmetics.unlock('magic_book');
+    await cosmetics.synchronize();
+
+    final coins = CoinRepository(
+      preferences: preferences,
+      remoteStore: _OfflineCoinRemote(),
+    );
+    await coins.setTotalCoins(const CoinState(), 500);
+    await coins.synchronize();
+
+    final result = await GachaShopService(
+      coinStore: coins,
+      cosmeticStore: cosmetics,
+      gachaService: GachaService(
+        randomSource: _SequenceRandom(doubles: [0.75], integers: [2]),
+      ),
+    ).openBox(GachaBoxType.standard);
+    await coins.synchronize();
+
+    final reopenedCosmetics = CosmeticRepository(
+      preferences: preferences,
+      remoteStore: cosmeticRemote,
+    );
+    final reopenedCoins = CoinRepository(
+      preferences: preferences,
+      remoteStore: _OfflineCoinRemote(),
+    );
+    final ownedIds = await reopenedCosmetics.loadOwnedIds();
+    expect(result.status, GachaPurchaseStatus.duplicate);
+    expect(result.duplicateRefund, 75);
+    expect(result.coinBalance, 475);
+    expect(ownedIds.where((id) => id == 'magic_book'), hasLength(1));
+    expect((await reopenedCoins.load()).totalCoins, 475);
+  });
 
   test('five-star duplicate uses the exact 300-coin refund', () async {
     final cosmetics = MemoryCosmeticStore(CosmeticSelection.none, {

@@ -43,6 +43,8 @@ class PreferenceKeys {
   static const String equippedBackId = 'equippedBackId';
   static const String cosmeticEconomyVersion = 'cosmeticEconomyVersion';
   static const String ownedCosmeticIds = 'ownedCosmeticIds';
+  static const String cosmeticOwnershipPendingSync =
+      'cosmeticOwnershipPendingSync';
   static const String localCoinState = 'localCoinStateV2';
   static const String localCoinStatePendingSync = 'localCoinStatePendingSyncV2';
   static const String localStatisticsState = 'localStatisticsStateV2';
@@ -75,6 +77,7 @@ class PreferenceKeys {
     equippedBackId,
     cosmeticEconomyVersion,
     ownedCosmeticIds,
+    cosmeticOwnershipPendingSync,
     localCoinState,
     localCoinStatePendingSync,
     localStatisticsState,

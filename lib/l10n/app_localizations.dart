@@ -1481,7 +1481,7 @@ abstract class AppLocalizations {
   /// No description provided for @cameraActiveIndicator.
   ///
   /// In en, this message translates to:
-  /// **'Front camera active • Images are not saved'**
+  /// **'Front camera active'**
   String get cameraActiveIndicator;
 
   /// No description provided for @cameraAndPrivacy.
