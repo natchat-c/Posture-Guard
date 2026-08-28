@@ -1,6 +1,6 @@
-import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:postureguard/services/face_detector_lifecycle.dart';
@@ -37,6 +37,37 @@ InputImage _testImage() {
 }
 
 void main() {
+  test('iOS skips the Android manual ML Kit initialization bridge', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    var nativeInitializationCount = 0;
+    final initializer = MlKitInitializer(
+      initializeNative: () async {
+        nativeInitializationCount++;
+      },
+    );
+
+    expect(await initializer.initialize(), isTrue);
+    expect(nativeInitializationCount, 0);
+    expect(initializer.state, MlKitInitializationState.initialized);
+  });
+
+  test('Android retains the manual ML Kit initialization path', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    var nativeInitializationCount = 0;
+    final initializer = MlKitInitializer(
+      initializeNative: () async {
+        nativeInitializationCount++;
+      },
+    );
+
+    expect(await initializer.initialize(), isTrue);
+    expect(await initializer.initialize(), isTrue);
+    expect(nativeInitializationCount, 1);
+    expect(initializer.state, MlKitInitializationState.initialized);
+  });
+
   test(
     'startup and background stop do not initialize ML Kit or create detector',
     () async {

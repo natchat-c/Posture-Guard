@@ -1,69 +1,185 @@
-# iOS readiness
+# Posture Guard iOS readiness
 
-This document records the platform boundary as of the pre-iOS cleanup. It does
-not define or implement an iOS background-monitoring design.
+This is a Windows preparation audit, not proof of an iOS build. Estimated iOS
+code/configuration readiness is **60%**. Flutter UI, data, sensors, camera, ML
+Kit, and Firebase have plausible iOS paths; the core Android background-service
+model, whole-device screen time, screen-state signals, and notification
+permission/actions do not yet have verified iOS parity.
 
-## Already platform-neutral
+## A. Prepared on Windows
 
-- Flutter UI, localization, settings, calibration models, posture thresholds,
-  posture classification, coins, cosmetics/gacha, and statistics summaries.
-- Sensor processing follows `sensor vector -> normalized phone angle -> pure
-  posture logic`; no Android type enters the classifier.
-- Local state uses `SharedPreferencesAsync`. Existing keys for language,
-  tutorial completion, settings, calibration, notification/camera prompts,
-  cosmetics/ownership, coin and gacha state, statistics cache, and alert mute
-  remain unchanged.
-- Firebase repositories use FlutterFire APIs and keep their existing database
-  paths. `firebase_options.dart` contains an iOS option, but native Apple
-  project registration still has to be completed and verified.
-- Camera capture and permission requests use Flutter plugins. Image-format
-  selection is now based on centralized platform capabilities.
+- Kept the existing `PlatformCapabilities`, screen-time, screen-state, and
+  background-monitoring service boundaries. No duplicate abstractions were
+  introduced.
+- Confirmed the Android-only manual ML Kit MethodChannel is skipped on iOS and
+  added tests for both the iOS skip and unchanged Android path.
+- Set the iOS project and CocoaPods deployment target to 15.5. This is required
+  by the installed `google_mlkit_face_detection` and
+  `google_mlkit_commons` podspecs; their documentation also requires Xcode
+  15.3 or newer and exclusion of armv7.
+- Added the standard Flutter CocoaPods integration, the ML Kit armv7 exclusion,
+  and only the `PERMISSION_CAMERA=1` permission-handler macro.
+- Clarified `NSCameraUsageDescription`: front camera, while the app is open,
+  on-device processing, and no saving or uploading.
+- Added no entitlements, background modes, notification plist keys, Apple
+  Screen Time APIs, or untestable native implementations.
 
-## Android-only areas
+## B-E. Feature readiness matrix
 
-| Feature | Files | Android dependency | Likely iOS path or fallback |
-| --- | --- | --- | --- |
-| Continuous background monitoring | `lib/services/monitoring_service.dart`, `lib/main.dart`, `android/app/src/main/AndroidManifest.xml` | `flutter_foreground_task`, special-use foreground service, wake lock, persistent low-priority notification | Design around permitted iOS background execution; until then the capability is explicitly unsupported and never reports itself running. |
-| Aggregate device screen time | `lib/services/device_screen_time_service.dart`, `android/app/src/main/kotlin/com/example/postureguard/MainActivity.kt` | MethodChannel, `UsageStatsManager`, `UsageEvents`, AppOps usage access, `PACKAGE_USAGE_STATS`, Android usage-access Settings intent | A separately entitled/authorized Apple Screen Time implementation may be possible. Current fallback returns unavailable/null so Home and Statistics retain Monitored Time and never show fabricated device time. |
-| Interactive/unlocked screen state | `lib/services/screen_state_service.dart`, `packages/screen_state_bridge/` | Android `PowerManager`, `KeyguardManager`, screen broadcasts, MethodChannel/EventChannel | No direct parity is assumed. Current fallback treats the screen as interactive and emits no transitions. Revisit with the eventual iOS monitoring design. |
-| Foreground-service notification | `lib/services/monitoring_service.dart`, `android/app/src/main/AndroidManifest.xml` | Android notification channel and foreground-service notification contract | No iOS equivalent is claimed; it follows the background-execution design. |
-| Posture notification channels/actions | `lib/services/notification_service.dart`, `android/app/src/main/AndroidManifest.xml` | Android channel importance, vibration pattern, visibility/category, action objects, and `ActionBroadcastReceiver` | Local alert content is reusable. iOS still needs notification authorization and Darwin categories/actions if mute buttons are required. |
-| Camera frame format | `lib/pages/home_page.dart`, `lib/platform/platform_capabilities.dart` | Android camera stream uses NV21; other platforms use BGRA8888 | Existing platform branch is centralized. Validate ML Kit frame metadata and front-camera behavior on physical iOS hardware. |
-| Android permissions/configuration | `android/app/src/main/AndroidManifest.xml` | Camera, notifications, foreground service/special use, wake lock, usage stats, optional camera features, portrait activity | Do not copy Android permissions. Configure only the Apple permissions/capabilities required by the chosen iOS feature set. |
+“Conceptual compile” means the Dart/plugin API has an iOS implementation or a
+guarded fallback; it still requires an actual Mac build.
 
-## Abstractions and current fallbacks
+| Feature | Current implementation | Android dependency | Conceptual iOS compile? | iOS equivalent/current fallback | Safe Windows preparation | Mac/Xcode or device verification |
+| --- | --- | --- | --- | --- | --- | --- |
+| Accelerometer/orientation | `sensors_plus` feeds platform-neutral angle normalization | Android sensor plugin implementation | Yes | `sensors_plus` Core Motion implementation | Existing code retained | Verify axes, rotations, sampling, portrait lock |
+| Posture classification | Pure Dart thresholds/classification | None | Yes | Same Dart logic | No change needed | Compare real-device classifications |
+| Calibration | Flutter UI plus platform-neutral calibration model | None | Yes | Same logic | No change needed | Verify sensor values and persistence |
+| Background monitoring | `MonitoringService` selects `BackgroundMonitoringPlatformService` | `flutter_foreground_task`, foreground service, wake lock, persistent notification | Yes, with reduced behavior | Explicit unsupported service; never reports running and does not call the Android service | Existing boundary retained | Design an Apple-permitted foreground/background model |
+| Screen interactive/lock | `ScreenStateProvider` | Internal Android MethodChannel/EventChannel bridge, `PowerManager`, `KeyguardManager`, broadcasts | Yes, with fallback | Always-interactive/no-events fallback | Existing boundary retained | Decide behavior with the future monitoring design |
+| Whole-device screen time | `DeviceScreenTimeProvider` | `UsageStatsManager`, `UsageEvents`, AppOps, usage-access Settings intent | Yes, with fallback | Unavailable/null; Statistics uses Monitored Time | Existing boundary retained | Apple Screen Time entitlement/product decision |
+| Usage Access UI/tutorial | Capability-gated Settings section and guided-tour step | Android usage-access permission/settings | Yes | Hidden/skipped when unsupported | Existing tests cover the fallback | Confirm complete flow on iPhone |
+| Notifications | `flutter_local_notifications`; service initialization has Android and Darwin settings | Android channels, category, vibration, action receiver; permission currently routed through monitoring service | Plugin: yes; product flow: incomplete | Darwin notification details exist; authorization and Darwin categories/actions still need work | No speculative change | Prompt, foreground/background delivery, action design |
+| Camera | `camera`, generic permission service, front-camera stream | Android camera plugin implementation; Android frames use NV21 | Yes | `camera_avfoundation`; non-Android frames use BGRA8888 | Camera plist text and macro prepared | Permission states, front-camera selection, frames, indicator |
+| ML Kit face detection | Lazy `FaceDetectorLifecycle`; manual initializer only when Android capability is true | `postureguard/ml_kit` MethodChannel and Android `MlKit.initialize` | Yes in structure | Native iOS ML Kit plugin creates detector; Android bridge is skipped | iOS/Android path tests added; iOS 15.5 prepared | CocoaPods resolution and physical-device detection |
+| Firebase Core | Explicit `DefaultFirebaseOptions.currentPlatform` | `google-services.json` only for Android native setup | Yes | FlutterFire iOS SDK and explicit Dart options | Configuration audited only | Bundle registration/config consistency |
+| Firebase anonymous Auth | FlutterFire repository/service | None in app code | Yes | Firebase Auth iOS SDK | No behavior change | Anonymous sign-in, restart identity, deletion |
+| Firebase Realtime Database | FlutterFire repositories under existing `users/{uid}` paths | None in app code | Yes | Firebase Database iOS SDK | Schema/paths untouched | Online/offline/read/write behavior |
+| SharedPreferences | `SharedPreferencesAsync` repositories | None in app code | Yes | `shared_preferences_foundation` | Keys/semantics untouched | Persistence across restart/reinstall expectations |
+| App lifecycle | Flutter lifecycle and monitoring facade | Android service is behind the facade | Yes, with reduced monitoring | Flutter lifecycle; unsupported background service | No change needed | Background/foreground transitions on device |
+| Permissions | Camera through `permission_handler`; notification permission through monitoring facade | Android permission model and Usage Access | Partially | Camera can use `permission_handler_apple`; notification runtime flow is pending | Camera macro/plist only | Denied/restricted/permanently denied/settings flows |
+| Privacy/PDPA | Flutter pages and persisted acknowledgements | Some existing English/Thai copy names Android | Yes | Same disclosure semantics; platform-specific copy needs a later localized pass | Semantics untouched | Review wording and UI on iOS |
+| Tutorial | Flutter tutorial; Usage Access step is capability-gated | Android Usage Access step | Yes | Android-only step is skipped | Existing behavior retained | End-to-end first-run test; review platform wording |
+| Delete My Data | Firebase user-tree removal, anonymous-user deletion, and local reset | No direct Android API; policy preserves some Android permission choices | Yes | Same logical deletion path | Semantics untouched | Verify remote deletion, local reset, and re-authentication |
+| Cosmetic cloud sync | FlutterFire plus local-first repositories | None in app code | Yes | Same repositories | Paths/ownership logic untouched | Offline edits, reconnect, ownership/equip sync |
+| UI/layout/localization | Material Flutter UI, English and Thai localizations | No compile-time Android widget dependency | Yes | Keep current visual identity | No redesign | Portrait sizes, safe areas, text scale, EN/TH overflow |
 
-- `PlatformCapabilities` is the single resolver for device screen time,
-  background monitoring, persistent foreground notification, screen-state
-  events, and Android camera format selection.
-- `DeviceScreenTimeProvider` selects the unchanged Android MethodChannel
-  provider on Android and `UnavailableDeviceScreenTimeProvider` elsewhere.
-- `ScreenStateProvider` selects the existing bridge on Android and
-  `AlwaysInteractiveScreenStateProvider` elsewhere.
-- `BackgroundMonitoringPlatformService` selects the existing Android
-  foreground-task implementation on Android and an explicit unsupported
-  implementation elsewhere. Widgets and app startup communicate only through
-  `MonitoringService`.
+## Package audit
 
-## Work required on macOS/Xcode
+| Dependency | Classification | iOS note |
+| --- | --- | --- |
+| `flutter`, `flutter_localizations` | Android + iOS | Framework/localization code |
+| `camera` | Android + iOS | Uses `camera_avfoundation`; device verification required |
+| `google_mlkit_face_detection` | Android + iOS | Requires iOS 15.5, Xcode 15.3+, CocoaPods, and physical verification |
+| `sensors_plus` | Android + iOS | Verify axes/orientation and sampling on iPhone |
+| `cupertino_icons`, `fdottedline_nullsafety`, `fl_chart` | Cross-platform Dart/UI | No native blocker identified |
+| `firebase_core`, `firebase_auth`, `firebase_database` | Android + iOS | Native pods and final Firebase app registration require Mac verification |
+| `flutter_local_notifications` | Android + iOS | Darwin authorization/categories/actions need product work and device tests |
+| `flutter_foreground_task` | Android + iOS plugin, Android-only app behavior | Retained for Android; startup selects the unsupported service on iOS |
+| `permission_handler` | Android + iOS | Only camera is enabled in the iOS Podfile; runtime test required |
+| `shared_preferences` | Android + iOS | Native persistence requires routine device verification |
+| `screen_state_bridge` | Android-only internal plugin | Never selected on iOS; safe always-interactive fallback is used |
+| `flutter_test`, `shared_preferences_platform_interface`, `flutter_lints` | Development-only | No release runtime role |
 
-1. Register the final iOS bundle identifier in Firebase, add the genuine
-   `GoogleService-Info.plist`, and verify that generated Dart options match the
-   registered app. Do not change existing Firebase database paths.
-2. Verify the existing camera usage description, camera permission flow, ML Kit
-   CocoaPods, deployment target, and physical-device camera frame handling.
-3. Request notification authorization and define Darwin notification
-   categories/actions if the mute actions are part of the iOS feature set.
-4. Choose an allowed iOS background-monitoring model before adding Background
-   Modes or entitlements. Android foreground-service behavior cannot simply be
-   simulated on iOS.
-5. Decide whether Apple Screen Time frameworks and their restricted
-   entitlements fit the product. Otherwise keep device screen time unavailable
-   and use the existing Monitored Time fallback.
-6. Only after those decisions, add AppDelegate, Info.plist, entitlement,
-   FamilyControls, or DeviceActivity changes. None were made in this cleanup.
+## F-G. Bundle identifier and Firebase status
 
-The largest expected reductions on iOS are continuous background posture
-monitoring, lock-state awareness, persistent foreground status, and aggregate
-whole-device screen time. Their capability flags remain false until real iOS
-implementations exist.
+- Xcode Runner bundle identifier (Debug/Profile/Release):
+  `com.example.postureguard`.
+- Firebase iOS bundle identifier in `lib/firebase_options.dart`:
+  `com.example.postureguard`.
+- Firebase iOS app ID:
+  `1:616136459870:ios:41b05d69081fa01ae216cf` in project
+  `posture-guard-ab657`.
+- `firebase_options.dart` does contain explicit iOS options, including the
+  Asia-Southeast Realtime Database URL.
+- `ios/Runner/GoogleService-Info.plist` is absent.
+- The current placeholder Xcode bundle and Dart options are internally
+  consistent, so they were not changed on Windows. Android production identity
+  remains `com.postureguard.app` and its Firebase configuration was untouched.
+
+Before release, choose the final iOS identifier (normally
+`com.postureguard.app` if Apple availability permits), register it as an iOS app
+in the Firebase project, and set the same identifier for all Runner
+configurations and signing in Xcode. Generate the iOS configuration into a
+temporary Dart file as described below so the existing multi-platform
+`firebase_options.dart` is not overwritten. Keep the Android Firebase app,
+options, and `google-services.json` unchanged.
+
+## H-J. Mac handoff
+
+Requirements: macOS, Xcode 15.3 or newer, an Apple development team/device,
+Flutter matching the project, CocoaPods, and an iPhone running iOS 15.5 or
+newer. There are no iOS entitlements or Background Modes yet.
+
+First baseline commands, before changing the bundle identity:
+
+```sh
+git pull
+flutter doctor -v
+flutter pub get
+flutter gen-l10n
+cd ios
+pod install
+cd ..
+flutter devices
+open ios/Runner.xcworkspace
+flutter run -d <iphone-device-id>
+```
+
+Use `Runner.xcworkspace`, not `Runner.xcodeproj`, because the native plugins use
+CocoaPods. If pod specs are stale, run `pod repo update` and retry `pod install`.
+Do not commit `Pods/` or machine-specific Xcode state.
+
+Likely first-session issues:
+
+- Xcode command-line tools, CocoaPods/Ruby setup, signing team, provisioning,
+  trust/developer mode, or an unavailable placeholder bundle identifier.
+- Pod resolution for Firebase/ML Kit and the enforced iOS 15.5 minimum.
+- Firebase release registration: install the Firebase CLI, run `firebase
+  login`, and install FlutterFire CLI with `dart pub global activate
+  flutterfire_cli`. After registering the exact final bundle ID, run from the
+  repository root:
+
+  ```sh
+  flutterfire configure --yes --project=posture-guard-ab657 --platforms=ios --ios-bundle-id=com.postureguard.app --out=lib/firebase_options_ios_candidate.dart --ios-out=ios/Runner/GoogleService-Info.plist
+  ```
+
+  Merge only the generated iOS `FirebaseOptions` into the existing
+  `lib/firebase_options.dart`, delete the candidate file, and confirm the
+  Android options are byte-for-byte unchanged. Ensure
+  `GoogleService-Info.plist` is a member of the Runner target. The current
+  FlutterFire CLI supports the platform, bundle-ID, and output flags, and Apple
+  configuration must be run on macOS.
+- ML Kit supports only 64-bit iOS architectures; armv7 is excluded in the
+  Podfile, but the effective Xcode build settings must still be inspected.
+- Camera frame metadata/orientation, sensor axes, permissions, and notification
+  delivery cannot be validated on Windows.
+- Background monitoring, lock-state awareness, whole-device screen time, and
+  persistent foreground status are intentionally reduced/unavailable on iOS.
+
+## K. Real-iPhone checklist
+
+- [ ] App launches without plugin/configuration errors; restart and offline
+      launch also work.
+- [ ] English and Thai language selection, first-run privacy disclosure, and
+      tutorial work; Android Usage Access is not shown.
+- [ ] Sensor orientation/axes and posture classification are correct in
+      portrait; calibration saves and restores.
+- [ ] Camera explanation and permission allow/deny/settings states work.
+- [ ] Front camera, visible camera indicator, ML Kit face detection, and
+      sensor-only fallback all work; images are neither saved nor uploaded.
+- [ ] Notification authorization and visible alerts work. Mute actions do not
+      have Android parity until Darwin categories/actions are implemented.
+- [ ] Backgrounding and return to foreground are safe. Continuous Android-style
+      background monitoring and its persistent notification are **not expected
+      to have parity** yet.
+- [ ] Screen lock/unlock does not crash. Android lock-state signaling is **not
+      expected to have parity** yet.
+- [ ] Statistics show the existing Monitored Time fallback. Whole-device Screen
+      Time/Usage Access is **not expected to have parity** yet.
+- [ ] Gacha, cosmetic local persistence, and equipped/owned cosmetic state work
+      across restart.
+- [ ] Firebase anonymous Auth persists; ownership sync handles reconnect and
+      offline mode.
+- [ ] Delete My Data removes `users/{uid}`, the anonymous Firebase user, and the
+      local state covered by the existing policy without crashing.
+
+## Intentionally deferred
+
+- No iOS build, `pod install`, or `xcodebuild` was attempted on Windows.
+- No final bundle-ID/Firebase registration change was guessed.
+- No AppDelegate customization, entitlement, Background Mode, Apple Screen Time
+  API, iOS background-monitoring implementation, or Darwin notification-action
+  design was added without Xcode/device verification.
+- No Android manifest, Gradle, Kotlin, foreground-service, ML Kit bridge,
+  notification, UsageStats, screen-state, posture, persistence, UI, tutorial,
+  or localization behavior was changed.

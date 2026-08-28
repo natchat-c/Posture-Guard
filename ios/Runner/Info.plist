@@ -27,7 +27,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Posture Guard uses the camera only while the app is open to improve posture detection. Camera images are not saved.</string>
+	<string>Posture Guard uses the front camera while the app is open to assist posture detection. Images are processed on this device and are not saved or uploaded.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
