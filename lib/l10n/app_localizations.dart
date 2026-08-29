@@ -842,6 +842,12 @@ abstract class AppLocalizations {
   /// **'Posture Guard could not stop. Please try again.'**
   String get monitoringStopFailed;
 
+  /// No description provided for @motionSensorsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Motion sensors are unavailable on this device.'**
+  String get motionSensorsUnavailable;
+
   /// No description provided for @notificationPermissionOff.
   ///
   /// In en, this message translates to:

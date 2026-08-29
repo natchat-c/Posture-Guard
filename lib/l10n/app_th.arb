@@ -128,6 +128,7 @@
   "monitoringStopped": "หยุด Posture Guard แล้ว",
   "monitoringStartFailed": "ไม่สามารถเริ่ม Posture Guard ได้ กรุณาลองอีกครั้ง",
   "monitoringStopFailed": "ไม่สามารถหยุด Posture Guard ได้ กรุณาลองอีกครั้ง",
+  "motionSensorsUnavailable": "อุปกรณ์นี้ไม่สามารถใช้เซ็นเซอร์ตรวจจับการเคลื่อนไหวได้",
   "notificationPermissionOff": "Posture Guard กำลังทำงาน แต่ยังไม่ได้เปิดการแจ้งเตือน คุณเปิดได้ในการตั้งค่า",
   "calibrationCloudWarning": "บันทึกตำแหน่งไว้ในเครื่องแล้ว ระบบจะลองสำรองข้อมูลอีกครั้งภายหลัง",
   "calibrationSaveFailed": "บันทึกตำแหน่งไม่ได้ กรุณาลองอีกครั้ง",

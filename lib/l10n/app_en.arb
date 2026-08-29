@@ -129,6 +129,7 @@
   "monitoringStopped": "Posture Guard stopped.",
   "monitoringStartFailed": "Posture Guard could not start. Please try again.",
   "monitoringStopFailed": "Posture Guard could not stop. Please try again.",
+  "motionSensorsUnavailable": "Motion sensors are unavailable on this device.",
   "notificationPermissionOff": "Posture Guard is working, but notifications are off. You can enable them in Settings.",
   "calibrationCloudWarning": "Your position was saved on this device. Cloud backup will try again later.",
   "calibrationSaveFailed": "Your position could not be saved. Please try again.",

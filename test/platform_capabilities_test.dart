@@ -12,23 +12,29 @@ void main() {
     );
 
     expect(capabilities.isAndroid, isTrue);
+    expect(capabilities.isIOS, isFalse);
+    expect(capabilities.supportsForegroundPostureMonitoring, isTrue);
     expect(capabilities.supportsDeviceScreenTime, isTrue);
     expect(capabilities.supportsBackgroundMonitoring, isTrue);
     expect(capabilities.supportsPersistentForegroundNotification, isTrue);
     expect(capabilities.supportsScreenStateEvents, isTrue);
+    expect(capabilities.supportsCameraAssistance, isTrue);
   });
 
-  test('iOS keeps Android-only capabilities explicitly unavailable', () {
+  test('iOS supports foreground posture monitoring but not Android parity', () {
     final capabilities = resolver.resolve(
       platform: TargetPlatform.iOS,
       isWeb: false,
     );
 
     expect(capabilities.isAndroid, isFalse);
+    expect(capabilities.isIOS, isTrue);
+    expect(capabilities.supportsForegroundPostureMonitoring, isTrue);
     expect(capabilities.supportsDeviceScreenTime, isFalse);
     expect(capabilities.supportsBackgroundMonitoring, isFalse);
     expect(capabilities.supportsPersistentForegroundNotification, isFalse);
     expect(capabilities.supportsScreenStateEvents, isFalse);
+    expect(capabilities.supportsCameraAssistance, isTrue);
   });
 
   test('web does not inherit Android capabilities from a target override', () {
@@ -38,7 +44,10 @@ void main() {
     );
 
     expect(capabilities.isAndroid, isFalse);
+    expect(capabilities.isIOS, isFalse);
+    expect(capabilities.supportsForegroundPostureMonitoring, isFalse);
     expect(capabilities.supportsDeviceScreenTime, isFalse);
     expect(capabilities.supportsBackgroundMonitoring, isFalse);
+    expect(capabilities.supportsCameraAssistance, isFalse);
   });
 }

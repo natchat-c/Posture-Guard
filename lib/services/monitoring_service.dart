@@ -20,6 +20,7 @@ import '../models/calibration.dart';
 import '../models/posture_thresholds.dart';
 import '../platform/platform_capabilities.dart';
 import 'auth_service.dart';
+import 'ios_foreground_monitoring_service.dart';
 import 'notification_service.dart';
 import 'preferences_service.dart';
 import 'alert_mute_service.dart';
@@ -86,6 +87,8 @@ abstract class BackgroundMonitoringPlatformService {
 
   Future<MonitoringActionResult> stop();
 
+  Future<void> handleAppLifecycleState(AppLifecycleState state);
+
   void updateSettings(AppSettings settings);
 
   void updateCalibration(Calibration calibration);
@@ -115,6 +118,10 @@ class BackgroundMonitoringPlatformServiceResolver {
     final resolvedCapabilities = capabilities ?? PlatformCapabilities.current;
     if (resolvedCapabilities.supportsBackgroundMonitoring) {
       return const AndroidBackgroundMonitoringPlatformService();
+    }
+    if (resolvedCapabilities.isIOS &&
+        resolvedCapabilities.supportsForegroundPostureMonitoring) {
+      return IosForegroundMonitoringPlatformService();
     }
     return const UnsupportedBackgroundMonitoringPlatformService();
   }
@@ -165,6 +172,9 @@ class AndroidBackgroundMonitoringPlatformService
   Future<MonitoringActionResult> stop() => _AndroidMonitoringService.stop();
 
   @override
+  Future<void> handleAppLifecycleState(AppLifecycleState state) async {}
+
+  @override
   void updateSettings(AppSettings settings) {
     _AndroidMonitoringService.updateSettings(settings);
   }
@@ -205,6 +215,123 @@ class AndroidBackgroundMonitoringPlatformService
   void updateLanguage(String languageCode) {
     _AndroidMonitoringService.updateLanguage(languageCode);
   }
+}
+
+class IosForegroundMonitoringPlatformService
+    implements BackgroundMonitoringPlatformService {
+  IosForegroundMonitoringPlatformService({
+    IosForegroundMonitoringController? controller,
+  }) : controller = controller ?? IosForegroundMonitoringController();
+
+  @visibleForTesting
+  final IosForegroundMonitoringController controller;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  void initializeCommunicationPort() {}
+
+  @override
+  void initialize() {}
+
+  @override
+  void addTaskDataCallback(MonitoringTaskDataCallback callback) {
+    controller.addDataCallback(callback);
+  }
+
+  @override
+  void removeTaskDataCallback(MonitoringTaskDataCallback callback) {
+    controller.removeDataCallback(callback);
+  }
+
+  @override
+  Future<bool> isRunning() async => controller.isEnabled;
+
+  @override
+  Future<NotificationPermission> notificationPermission() async {
+    return NotificationPermission.denied;
+  }
+
+  @override
+  Future<NotificationPermission>
+  requestNotificationPermissionIfAppropriate() async {
+    return NotificationPermission.denied;
+  }
+
+  @override
+  Future<MonitoringActionResult> start() async {
+    try {
+      final started = await controller.start();
+      return MonitoringActionResult(
+        success: started,
+        isRunning: controller.isEnabled,
+      );
+    } catch (error) {
+      return MonitoringActionResult(
+        success: false,
+        isRunning: controller.isEnabled,
+        error: error,
+      );
+    }
+  }
+
+  @override
+  Future<MonitoringActionResult> stop() async {
+    try {
+      await controller.stop();
+      return const MonitoringActionResult(success: true, isRunning: false);
+    } catch (error) {
+      return MonitoringActionResult(
+        success: false,
+        isRunning: controller.isEnabled,
+        error: error,
+      );
+    }
+  }
+
+  @override
+  Future<void> handleAppLifecycleState(AppLifecycleState state) {
+    return controller.handleAppLifecycleState(state);
+  }
+
+  @override
+  void updateSettings(AppSettings settings) {
+    controller.updateSettings(settings);
+  }
+
+  @override
+  void updateCalibration(Calibration calibration) {
+    controller.updateCalibration(calibration);
+  }
+
+  @override
+  void updateCameraSupplement({
+    required bool available,
+    bool suggestsGoodPosture = false,
+  }) {
+    controller.updateCameraSupplement(
+      available: available,
+      suggestsGoodPosture: suggestsGoodPosture,
+    );
+  }
+
+  @override
+  void reportCameraUnavailable() {
+    controller.reportCameraUnavailable();
+  }
+
+  @override
+  void requestState() => controller.requestState();
+
+  @override
+  void requestStatisticsSync() => controller.requestStatisticsSync();
+
+  @override
+  void alertMuteChanged() => controller.alertMuteChanged();
+
+  @override
+  void updateLanguage(String languageCode) {}
 }
 
 class UnsupportedBackgroundMonitoringPlatformService
@@ -253,6 +380,9 @@ class UnsupportedBackgroundMonitoringPlatformService
   Future<MonitoringActionResult> stop() async {
     return const MonitoringActionResult(success: true, isRunning: false);
   }
+
+  @override
+  Future<void> handleAppLifecycleState(AppLifecycleState state) async {}
 
   @override
   void updateSettings(AppSettings settings) {}
@@ -318,6 +448,10 @@ class MonitoringService {
   static Future<MonitoringActionResult> start() => _platformService.start();
 
   static Future<MonitoringActionResult> stop() => _platformService.stop();
+
+  static Future<void> handleAppLifecycleState(AppLifecycleState state) {
+    return _platformService.handleAppLifecycleState(state);
+  }
 
   static void updateSettings(AppSettings settings) {
     _platformService.updateSettings(settings);

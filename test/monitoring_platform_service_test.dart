@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:postureguard/platform/platform_capabilities.dart';
@@ -11,6 +13,7 @@ class _RecordingMonitoringPlatformService
   int starts = 0;
   int stops = 0;
   final List<MonitoringTaskDataCallback> callbacks = [];
+  final List<AppLifecycleState> lifecycleStates = [];
 
   @override
   bool get isSupported => true;
@@ -48,6 +51,11 @@ class _RecordingMonitoringPlatformService
     stops++;
     return const MonitoringActionResult(success: true, isRunning: false);
   }
+
+  @override
+  Future<void> handleAppLifecycleState(AppLifecycleState state) async {
+    lifecycleStates.add(state);
+  }
 }
 
 void main() {
@@ -67,10 +75,25 @@ void main() {
     expect(service, isA<AndroidBackgroundMonitoringPlatformService>());
   });
 
-  test('non-Android monitoring is explicit and never claims to run', () async {
+  test(
+    'iOS selects foreground monitoring without claiming background parity',
+    () {
+      final service = monitoringResolver.resolve(
+        capabilities: capabilityResolver.resolve(
+          platform: TargetPlatform.iOS,
+          isWeb: false,
+        ),
+      );
+
+      expect(service, isA<IosForegroundMonitoringPlatformService>());
+      expect(service.isSupported, isTrue);
+    },
+  );
+
+  test('non-mobile monitoring is explicit and never claims to run', () async {
     final service = monitoringResolver.resolve(
       capabilities: capabilityResolver.resolve(
-        platform: TargetPlatform.iOS,
+        platform: TargetPlatform.windows,
         isWeb: false,
       ),
     );
@@ -93,6 +116,7 @@ void main() {
     MonitoringService.addTaskDataCallback(callback);
     expect(await MonitoringService.isRunning(), isTrue);
     expect((await MonitoringService.start()).isRunning, isTrue);
+    await MonitoringService.handleAppLifecycleState(AppLifecycleState.paused);
     expect((await MonitoringService.stop()).isRunning, isFalse);
     MonitoringService.removeTaskDataCallback(callback);
 
@@ -101,6 +125,7 @@ void main() {
     expect(service.runningChecks, 1);
     expect(service.starts, 1);
     expect(service.stops, 1);
+    expect(service.lifecycleStates, [AppLifecycleState.paused]);
     expect(service.callbacks, isEmpty);
   });
 }

@@ -90,6 +90,14 @@ void main() {
       expect(thai.cameraAndPrivacy, 'ความเป็นส่วนตัวและ PDPA');
       expect(english.cameraExplanationTitle, 'Camera assistance');
       expect(thai.cameraExplanationTitle, 'การช่วยตรวจท่าด้วยกล้อง');
+      expect(
+        english.motionSensorsUnavailable,
+        'Motion sensors are unavailable on this device.',
+      );
+      expect(
+        thai.motionSensorsUnavailable,
+        'อุปกรณ์นี้ไม่สามารถใช้เซ็นเซอร์ตรวจจับการเคลื่อนไหวได้',
+      );
     },
   );
 

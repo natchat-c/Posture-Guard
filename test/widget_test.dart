@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:postureguard/services/preferences_service.dart';
 import 'package:postureguard/services/app_startup_coordinator.dart';
+import 'package:postureguard/services/monitoring_service.dart';
 import 'package:postureguard/models/app_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
@@ -28,7 +29,45 @@ class _SensorOnlySettingsStore implements SettingsStore {
   }
 }
 
+class _LifecycleRecordingMonitoringService
+    extends UnsupportedBackgroundMonitoringPlatformService {
+  final List<AppLifecycleState> states = [];
+
+  @override
+  Future<void> handleAppLifecycleState(AppLifecycleState state) async {
+    states.add(state);
+  }
+}
+
 void main() {
+  testWidgets('app lifecycle is forwarded to the monitoring platform', (
+    tester,
+  ) async {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.withData({
+          PreferenceKeys.selectedLanguageCode: 'en',
+        });
+    final service = _LifecycleRecordingMonitoringService();
+    MonitoringService.usePlatformServiceForTesting(service);
+    addTearDown(MonitoringService.resetPlatformServiceForTesting);
+
+    await tester.pumpWidget(const MyApp(initialTutorialCompleted: false));
+    await tester.pumpAndSettle();
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+
+    expect(
+      service.states,
+      containsAllInOrder(const [
+        AppLifecycleState.paused,
+        AppLifecycleState.resumed,
+      ]),
+    );
+  });
+
   testWidgets('first launch shows privacy after language and before tutorial', (
     tester,
   ) async {

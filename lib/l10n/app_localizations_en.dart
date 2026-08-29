@@ -422,6 +422,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Posture Guard could not stop. Please try again.';
 
   @override
+  String get motionSensorsUnavailable =>
+      'Motion sensors are unavailable on this device.';
+
+  @override
   String get notificationPermissionOff =>
       'Posture Guard is working, but notifications are off. You can enable them in Settings.';
 

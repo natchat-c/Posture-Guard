@@ -110,6 +110,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    unawaited(MonitoringService.handleAppLifecycleState(state));
     if (state == AppLifecycleState.resumed) {
       unawaited(_initializeCloud(forceAuthRetry: true));
     }

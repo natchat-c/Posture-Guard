@@ -416,6 +416,10 @@ class AppLocalizationsTh extends AppLocalizations {
       'ไม่สามารถหยุด Posture Guard ได้ กรุณาลองอีกครั้ง';
 
   @override
+  String get motionSensorsUnavailable =>
+      'อุปกรณ์นี้ไม่สามารถใช้เซ็นเซอร์ตรวจจับการเคลื่อนไหวได้';
+
+  @override
   String get notificationPermissionOff =>
       'Posture Guard กำลังทำงาน แต่ยังไม่ได้เปิดการแจ้งเตือน คุณเปิดได้ในการตั้งค่า';
 

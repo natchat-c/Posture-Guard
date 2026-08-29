@@ -361,7 +361,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   void _onServiceData(Object data) {
     if (!mounted || data is! Map) return;
     if (data['type'] == 'monitoringError') {
-      final message = context.l10n.monitoringProblem;
+      final message = data['code'] == 'motionSensorsUnavailable'
+          ? context.l10n.motionSensorsUnavailable
+          : context.l10n.monitoringProblem;
       setState(() => _monitoringError = message);
       _showMessage(message);
       return;
