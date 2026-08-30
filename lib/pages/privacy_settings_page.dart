@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/locale_controller.dart';
+import '../platform/platform_capabilities.dart';
 import '../services/camera_privacy_service.dart';
 import '../services/user_data_deletion_service.dart';
 
@@ -122,6 +123,7 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final capabilities = PlatformCapabilities.current;
     if (_deleted) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.cameraAndPrivacy)),
@@ -174,6 +176,12 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                           ),
                           const Divider(height: 40),
                           _PrivacySection(
+                            title: l10n.privacyPagePostureTitle,
+                            children: [
+                              _PrivacyParagraphs(l10n.privacyPagePostureBody),
+                            ],
+                          ),
+                          _PrivacySection(
                             title: l10n.privacyPageCameraUseTitle,
                             children: [
                               _PrivacyParagraphs(
@@ -186,6 +194,10 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                               _PrivacyParagraphs(
                                 l10n.privacyPageCameraUseClosing,
                               ),
+                              const SizedBox(height: 12),
+                              _PrivacyParagraphs(
+                                l10n.privacyPageCameraPermissionBody,
+                              ),
                               const SizedBox(height: 4),
                               OutlinedButton.icon(
                                 key: const Key('turnOffCameraAssistanceButton'),
@@ -194,14 +206,6 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                                     : null,
                                 icon: const Icon(Icons.videocam_off_outlined),
                                 label: Text(l10n.turnOffCameraAssistance),
-                              ),
-                            ],
-                          ),
-                          _PrivacySection(
-                            title: l10n.privacyPageCameraPermissionTitle,
-                            children: [
-                              _PrivacyParagraphs(
-                                l10n.privacyPageCameraPermissionBody,
                               ),
                             ],
                           ),
@@ -223,7 +227,19 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                           _PrivacySection(
                             title: l10n.privacyPageFirebaseTitle,
                             children: [
-                              _PrivacyParagraphs(l10n.privacyPageFirebaseBody),
+                              _PrivacyParagraphs(
+                                l10n.privacyPageFirebaseBody('{uid}'),
+                              ),
+                            ],
+                          ),
+                          _PrivacySection(
+                            title: l10n.privacyPageScreenTimeTitle,
+                            children: [
+                              _PrivacyParagraphs(
+                                capabilities.supportsDeviceScreenTime
+                                    ? l10n.privacyPageScreenTimeAndroidBody
+                                    : l10n.privacyPageScreenTimeIosBody,
+                              ),
                             ],
                           ),
                           _PrivacySection(
@@ -235,7 +251,9 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                           _PrivacySection(
                             title: l10n.privacyPageDeleteTitle,
                             children: [
-                              _PrivacyParagraphs(l10n.privacyPageDeleteBody),
+                              _PrivacyParagraphs(
+                                l10n.privacyPageDeleteBody('{uid}'),
+                              ),
                               const SizedBox(height: 4),
                               FilledButton.icon(
                                 key: const Key('deleteMyDataButton'),
@@ -259,20 +277,6 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                                       : l10n.deleteMyData,
                                 ),
                               ),
-                            ],
-                          ),
-                          _PrivacySection(
-                            title: l10n.privacyPageCameraIndicatorTitle,
-                            children: [
-                              _PrivacyParagraphs(
-                                l10n.privacyPageCameraIndicatorBody,
-                              ),
-                            ],
-                          ),
-                          _PrivacySection(
-                            title: l10n.privacyPageConsentTitle,
-                            children: [
-                              _PrivacyParagraphs(l10n.privacyPageConsentBody),
                             ],
                           ),
                           _PrivacySection(

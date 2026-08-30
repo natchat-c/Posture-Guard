@@ -127,7 +127,6 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
   bool _usageSettingsOpenedFromTour = false;
   List<_SettingsTourItem> _guidedTourItems = const [];
   int? _guidedTourIndex;
-  int? _preparedGuidedTourIndex;
   late final AlertMuteController _alertMuteController;
   DateTime? _alertsMutedUntil;
   Timer? _muteStatusTimer;
@@ -625,7 +624,6 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
     ];
     setState(() {
       _guidedTourIndex = 0;
-      _preparedGuidedTourIndex = null;
     });
   }
 
@@ -642,34 +640,6 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
       _SettingsTourItem.language => _languageTourKey,
       null => null,
     };
-  }
-
-  Future<void> _prepareGuidedTourTarget() async {
-    final index = _guidedTourIndex;
-    if (index == null || _preparedGuidedTourIndex == index) return;
-    _preparedGuidedTourIndex = index;
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-    final targetContext = _guidedTourKey(
-      _currentGuidedTourItem,
-    )?.currentContext;
-    if (targetContext != null && targetContext.mounted) {
-      await Scrollable.ensureVisible(
-        targetContext,
-        alignment: 0.35,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    }
-    if (mounted) setState(() {});
-  }
-
-  Rect? _guidedTourTargetRect() {
-    final renderObject = _guidedTourKey(
-      _currentGuidedTourItem,
-    )?.currentContext?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
-    return renderObject.localToGlobal(Offset.zero) & renderObject.size;
   }
 
   void _finishGuidedTour(SettingsTourResult result) {
@@ -691,7 +661,6 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
     }
     setState(() {
       _guidedTourIndex = next;
-      _preparedGuidedTourIndex = null;
     });
   }
 
@@ -1274,9 +1243,6 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
     if (guidedTourIndex == null || guidedTourItem == null) {
       return settingsPage;
     }
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _prepareGuidedTourTarget(),
-    );
     final copy = _guidedTourCopy(guidedTourItem);
     final isPrivacy = guidedTourItem == _SettingsTourItem.privacy;
     final isCamera = guidedTourItem == _SettingsTourItem.camera;
@@ -1291,7 +1257,9 @@ class _SettingsState extends State<Settings> with WidgetsBindingObserver {
         settingsPage,
         Positioned.fill(
           child: CoachMarkOverlay(
-            target: _guidedTourTargetRect(),
+            targetKey: _guidedTourKey(guidedTourItem),
+            targetIdentity: guidedTourItem,
+            scrollAlignment: 0.28,
             title: copy.$1,
             body: copy.$2,
             currentStep: guidedTourIndex,

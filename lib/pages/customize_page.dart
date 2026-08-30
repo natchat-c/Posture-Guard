@@ -36,7 +36,6 @@ class _CustomizesState extends State<Customizes> {
   final GlobalKey _ownedCosmeticsTourKey = GlobalKey();
   final GlobalKey _shopButtonTourKey = GlobalKey();
   int? _guidedTourStep;
-  int? _preparedGuidedTourStep;
 
   @override
   void initState() {
@@ -131,23 +130,12 @@ class _CustomizesState extends State<Customizes> {
     );
   }
 
-  Future<void> _prepareGuidedTourTarget() async {
-    final step = _guidedTourStep;
-    if (step == null || _preparedGuidedTourStep == step) return;
-    _preparedGuidedTourStep = step;
-    await WidgetsBinding.instance.endOfFrame;
-    if (mounted) setState(() {});
-  }
-
-  Rect? _guidedTourTargetRect() {
-    final key = switch (_guidedTourStep) {
+  GlobalKey? _guidedTourTargetKey(int? step) {
+    return switch (step) {
       0 => _ownedCosmeticsTourKey,
       1 => _shopButtonTourKey,
       _ => null,
     };
-    final renderObject = key?.currentContext?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
-    return renderObject.localToGlobal(Offset.zero) & renderObject.size;
   }
 
   void _finishGuidedTour(CustomizeTourResult result) {
@@ -176,21 +164,13 @@ class _CustomizesState extends State<Customizes> {
         _finishGuidedTour(CustomizeTourResult.skipped);
       case ShopTourResult.back:
       case null:
-        setState(() {
-          _guidedTourStep = 1;
-          _preparedGuidedTourStep = null;
-        });
+        setState(() => _guidedTourStep = 1);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    if (_guidedTourStep != null) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _prepareGuidedTourTarget(),
-      );
-    }
     final page = Scaffold(
       appBar: AppBar(title: Text(l10n.customize)),
       body: SafeArea(
@@ -286,7 +266,8 @@ class _CustomizesState extends State<Customizes> {
         page,
         Positioned.fill(
           child: CoachMarkOverlay(
-            target: _guidedTourTargetRect(),
+            targetKey: _guidedTourTargetKey(step),
+            targetIdentity: step,
             title: step == 0
                 ? l10n.customizeTourTitle
                 : l10n.customizeShopTourTitle,
@@ -300,15 +281,9 @@ class _CustomizesState extends State<Customizes> {
             skipLabel: l10n.skipForNow,
             onBack: step == 0
                 ? () => _finishGuidedTour(CustomizeTourResult.back)
-                : () => setState(() {
-                    _guidedTourStep = 0;
-                    _preparedGuidedTourStep = null;
-                  }),
+                : () => setState(() => _guidedTourStep = 0),
             onNext: step == 0
-                ? () => setState(() {
-                    _guidedTourStep = 1;
-                    _preparedGuidedTourStep = null;
-                  })
+                ? () => setState(() => _guidedTourStep = 1)
                 : null,
             onSkip: () => _finishGuidedTour(CustomizeTourResult.skipped),
             nextButtonKey: const Key('customizeTourNextButton'),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:postureguard/l10n/app_localizations.dart';
@@ -183,13 +184,13 @@ Future<void> _openPrivacyTourAndReturnToCamera(
 
   expect(find.text(privacyCopy), findsOneWidget);
   final privacyTile = find.byKey(const Key('cameraPrivacySettingsTile'));
-  final overlayFinder = find.byType(CoachMarkOverlay);
-  final privacyOverlay = tester.widget<CoachMarkOverlay>(overlayFinder);
-  final privacyTarget = privacyOverlay.target!;
+  final privacyTarget = tester.getRect(
+    find.byKey(CoachMarkOverlay.spotlightKey),
+  );
   final privacyRect = tester.getRect(privacyTile);
-  expect(privacyTarget.overlaps(privacyRect), isTrue);
-  expect(privacyTarget.size, privacyRect.size);
-  expect((privacyTarget.center - privacyRect.center).distance, lessThan(20));
+  expect(privacyTarget.contains(privacyRect.topLeft), isTrue);
+  expect(privacyTarget.contains(privacyRect.bottomRight), isTrue);
+  expect((privacyTarget.center - privacyRect.center).distance, lessThan(1));
 
   if (tapTarget) {
     await tester.tap(privacyTile);
@@ -207,12 +208,13 @@ Future<void> _openPrivacyTourAndReturnToCamera(
 
   expect(find.text(cameraCopy), findsOneWidget);
   final cameraSwitch = find.byKey(const Key('cameraAssistEnabledSwitch'));
-  final cameraOverlay = tester.widget<CoachMarkOverlay>(overlayFinder);
-  final cameraTarget = cameraOverlay.target!;
+  final cameraTarget = tester.getRect(
+    find.byKey(CoachMarkOverlay.spotlightKey),
+  );
   final cameraRect = tester.getRect(cameraSwitch);
-  expect(cameraTarget.overlaps(cameraRect), isTrue);
-  expect(cameraTarget.size, cameraRect.size);
-  expect((cameraTarget.center - cameraRect.center).distance, lessThan(20));
+  expect(cameraTarget.contains(cameraRect.topLeft), isTrue);
+  expect(cameraTarget.contains(cameraRect.bottomRight), isTrue);
+  expect((cameraTarget.center - cameraRect.center).distance, lessThan(1));
 }
 
 Future<void> _skipCameraTourStep(WidgetTester tester) async {
@@ -639,15 +641,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Privacy & PDPA'), findsOneWidget);
+    expect(find.text('Posture and motion data'), findsOneWidget);
     expect(find.text('Camera use'), findsOneWidget);
-    expect(find.text('Camera permission'), findsOneWidget);
-    expect(find.text('Data we store'), findsOneWidget);
+    expect(find.text('Data kept on this device'), findsOneWidget);
     expect(find.text('Firebase and cloud data'), findsOneWidget);
-    expect(find.text('Your choices'), findsOneWidget);
+    expect(find.text('Device screen time'), findsOneWidget);
+    expect(find.text('Alerts, permissions, and your choices'), findsOneWidget);
     expect(find.text('Delete your data'), findsOneWidget);
-    expect(find.text('Camera indicator'), findsOneWidget);
-    expect(find.text('Consent and control'), findsOneWidget);
-    expect(find.text('Privacy policy'), findsOneWidget);
+    expect(find.text('About PDPA'), findsOneWidget);
     expect(
       find.byKey(const Key('turnOffCameraAssistanceButton')),
       findsOneWidget,
@@ -655,6 +656,29 @@ void main() {
     expect(find.byKey(const Key('deleteMyDataButton')), findsOneWidget);
     expect(find.textContaining('PDPA compliant'), findsNothing);
     expect(find.textContaining('legally compliant'), findsNothing);
+  });
+
+  testWidgets('iOS privacy copy omits Android Usage Access behavior', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.pumpWidget(
+      _settingsApp(_FakeSettingsStore(AppSettings.defaults)),
+    );
+    await tester.pumpAndSettle();
+
+    final privacyTile = find.byKey(const Key('cameraPrivacySettingsTile'));
+    await _bringIntoView(tester, privacyTile);
+    await tester.tap(privacyTile);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Whole-device screen time is not available'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('filters Android usage events'), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('Thai Settings exposes ความเป็นส่วนตัวและ PDPA', (tester) async {
@@ -674,10 +698,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('ความเป็นส่วนตัวและ PDPA'), findsOneWidget);
+    expect(find.text('ข้อมูลท่าทางและการเคลื่อนไหว'), findsOneWidget);
     expect(find.text('การใช้กล้อง'), findsOneWidget);
-    expect(find.text('ข้อมูลที่จัดเก็บ'), findsOneWidget);
+    expect(find.text('ข้อมูลที่เก็บในอุปกรณ์นี้'), findsOneWidget);
+    expect(find.text('เวลาหน้าจอของอุปกรณ์'), findsOneWidget);
     expect(find.text('การลบข้อมูล'), findsOneWidget);
-    expect(find.text('นโยบายความเป็นส่วนตัว'), findsOneWidget);
+    expect(find.text('เกี่ยวกับ PDPA'), findsOneWidget);
     expect(find.byKey(const Key('deleteMyDataButton')), findsOneWidget);
   });
 
@@ -1328,6 +1354,36 @@ void main() {
       find.text('Choose how long Posture Guard waits before reminding you.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('iOS guided tour never includes Android Usage Access', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.pumpWidget(
+      _settingsApp(
+        _FakeSettingsStore(AppSettings.defaults),
+        showGuidedTour: true,
+        loadNotificationPermission: () async => NotificationPermission.granted,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _openPrivacyTourAndReturnToCamera(tester);
+    await _skipCameraTourStep(tester);
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settingsTourNextButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Show your screen time'), findsNothing);
+    expect(find.byKey(const Key('allowScreenTimeAccessButton')), findsNothing);
+    expect(
+      find.text('Choose how long Posture Guard waits before reminding you.'),
+      findsOneWidget,
+    );
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('Thai guided Settings copy fits scaled phone text', (

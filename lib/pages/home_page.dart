@@ -129,7 +129,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   double? _headY;
   double? _headZ;
   int? _tourStep;
-  int? _preparedTourStep;
   bool _monitoringWasActiveBeforeDeletion = false;
 
   bool get _appIsVisible {
@@ -638,7 +637,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     await _refreshPresentationSources();
     if (!mounted || !guided) return;
     setState(() {
-      _preparedTourStep = null;
       _tourStep = switch (tourResult) {
         SettingsTourResult.completed => 2,
         SettingsTourResult.skipped => null,
@@ -718,7 +716,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     await _refreshPresentationSources();
     if (!mounted || !guided) return;
     setState(() {
-      _preparedTourStep = null;
       _tourStep = switch (tourResult) {
         CustomizeTourResult.completed => 4,
         CustomizeTourResult.skipped => null,
@@ -1059,7 +1056,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   void _startHomeTour() {
     setState(() {
       _tourStep = 0;
-      _preparedTourStep = null;
     });
   }
 
@@ -1074,24 +1070,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     };
   }
 
-  Future<void> _prepareTourTarget() async {
-    final step = _tourStep;
-    if (step == null || _preparedTourStep == step) return;
-    _preparedTourStep = step;
-    await WidgetsBinding.instance.endOfFrame;
-    if (mounted) setState(() {});
-  }
-
-  Rect? _tourTargetRect() {
-    final step = _tourStep;
-    if (step == null) return null;
-    final renderObject = _tourKeyForStep(
-      step,
-    )?.currentContext?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
-    return renderObject.localToGlobal(Offset.zero) & renderObject.size;
-  }
-
   void _moveTour(int delta) {
     final current = _tourStep;
     if (current == null) return;
@@ -1103,7 +1081,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
     setState(() {
       _tourStep = next;
-      _preparedTourStep = null;
     });
   }
 
@@ -1185,9 +1162,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
 
     final l10n = context.l10n;
-    if (_tourStep != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _prepareTourTarget());
-    }
     final tourContent = switch (_tourStep) {
       0 => (l10n.guidePostureTitle, l10n.guidePostureBody),
       1 => (l10n.guideSettingsTitle, l10n.guideSettingsBody),
@@ -1648,7 +1622,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         home,
         Positioned.fill(
           child: CoachMarkOverlay(
-            target: _tourTargetRect(),
+            targetKey: _tourKeyForStep(step),
+            targetIdentity: step,
+            spotlightShape: step == 1 || step == 4
+                ? CoachMarkSpotlightShape.circle
+                : CoachMarkSpotlightShape.roundedRectangle,
             title: tourContent.$1,
             body: tourContent.$2,
             content: step == 0

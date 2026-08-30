@@ -40,7 +40,6 @@ class _ShopState extends State<Shop> {
   bool _opening = false;
   final GlobalKey _boxesTourKey = GlobalKey();
   bool _guidedTourVisible = false;
-  bool _guidedTourTargetPrepared = false;
 
   @override
   void initState() {
@@ -220,40 +219,42 @@ class _ShopState extends State<Shop> {
         children: [
           AspectRatio(
             aspectRatio: 1,
-            child: Stack(
-              key: Key('gachaArtworkArea-${type.name}'),
-              fit: StackFit.expand,
-              children: [
-                GachaBoxVisual(
-                  key: Key('shopGachaBoxVisual-${type.name}'),
-                  type: type,
-                  config: GachaBoxVisualConfigs.finalized.forType(type),
-                  keyPrefix: 'shopGachaBox',
-                ),
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: IconButton(
-                    key: Key('odds-help-${type.name}'),
-                    tooltip: context.l10n.odds,
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size.square(48),
-                      backgroundColor: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainerHigh
-                          .withValues(alpha: 0.88),
-                    ),
-                    onPressed: () => _showOdds(type),
-                    icon: const Icon(Icons.question_mark, size: 20),
+            child: KeyedSubtree(
+              key: type == GachaBoxType.standard ? _boxesTourKey : null,
+              child: Stack(
+                key: Key('gachaArtworkArea-${type.name}'),
+                fit: StackFit.expand,
+                children: [
+                  GachaBoxVisual(
+                    key: Key('shopGachaBoxVisual-${type.name}'),
+                    type: type,
+                    config: GachaBoxVisualConfigs.finalized.forType(type),
+                    keyPrefix: 'shopGachaBox',
                   ),
-                ),
-              ],
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: IconButton(
+                      key: Key('odds-help-${type.name}'),
+                      tooltip: context.l10n.odds,
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size.square(48),
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHigh
+                            .withValues(alpha: 0.88),
+                      ),
+                      onPressed: () => _showOdds(type),
+                      icon: const Icon(Icons.question_mark, size: 20),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),
           Text(
             _boxName(context, type),
-            key: type == GachaBoxType.standard ? _boxesTourKey : null,
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
@@ -297,19 +298,6 @@ class _ShopState extends State<Shop> {
         _boxCard(context, GachaBoxType.premium),
       ],
     );
-  }
-
-  Future<void> _prepareGuidedTourTarget() async {
-    if (!_guidedTourVisible || _guidedTourTargetPrepared) return;
-    _guidedTourTargetPrepared = true;
-    await WidgetsBinding.instance.endOfFrame;
-    if (mounted) setState(() {});
-  }
-
-  Rect? _guidedTourTargetRect() {
-    final renderObject = _boxesTourKey.currentContext?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
-    return renderObject.localToGlobal(Offset.zero) & renderObject.size;
   }
 
   void _finishGuidedTour(ShopTourResult result) {
@@ -371,11 +359,6 @@ class _ShopState extends State<Shop> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    if (_guidedTourVisible) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _prepareGuidedTourTarget(),
-      );
-    }
     final page = Scaffold(
       appBar: AppBar(title: Text(l10n.shop)),
       body: SafeArea(
@@ -452,7 +435,9 @@ class _ShopState extends State<Shop> {
         page,
         Positioned.fill(
           child: CoachMarkOverlay(
-            target: _guidedTourTargetRect(),
+            targetKey: _boxesTourKey,
+            targetIdentity: 'shop-boxes',
+            scrollAlignment: 0.08,
             title: l10n.shopTourTitle,
             body: l10n.shopTourBody,
             currentStep: 0,

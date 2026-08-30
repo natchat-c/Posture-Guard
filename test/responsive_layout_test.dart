@@ -123,12 +123,14 @@ Future<void> _pumpAt(
     ),
   );
   await tester.pumpAndSettle();
+  final exception = tester.takeException();
   expect(
-    tester.takeException(),
+    exception,
     isNull,
     reason:
         '${home.runtimeType} overflowed at '
-        '${size.width}x${size.height}, ${locale.languageCode}, $textScale x',
+        '${size.width}x${size.height}, ${locale.languageCode}, $textScale x; '
+        'coachMark=${find.byType(CoachMarkOverlay).evaluate().isNotEmpty}',
   );
 }
 
@@ -607,6 +609,7 @@ void main() {
         Rect.fromLTWH(24, 64, 44, 44),
         Rect.fromLTWH(250, 468, 44, 44),
       ]) {
+        final targetKey = GlobalKey();
         await _pumpAt(
           tester,
           size: size,
@@ -618,11 +621,12 @@ void main() {
               children: [
                 Positioned.fromRect(
                   rect: target,
-                  child: const ColoredBox(color: Colors.blue),
+                  child: ColoredBox(key: targetKey, color: Colors.blue),
                 ),
                 Positioned.fill(
                   child: CoachMarkOverlay(
-                    target: target,
+                    targetKey: targetKey,
+                    targetIdentity: target,
                     title: locale.languageCode == 'th'
                         ? 'คำแนะนำการใช้งาน'
                         : 'How to use this control',
@@ -656,6 +660,18 @@ void main() {
           find.byKey(const Key('coachMarkActions')),
           size,
           insets: insets,
+        );
+        final spotlight = tester.getRect(
+          find.byKey(CoachMarkOverlay.spotlightKey),
+        );
+        final renderedTarget = tester.getRect(find.byKey(targetKey));
+        expect(spotlight.contains(renderedTarget.topLeft), isTrue);
+        expect(spotlight.contains(renderedTarget.bottomRight), isTrue);
+        expect(
+          tester
+              .getRect(find.byKey(const Key('coachMarkCard')))
+              .overlaps(spotlight),
+          isFalse,
         );
       }
     }
