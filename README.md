@@ -15,14 +15,6 @@ Posture Guard uses phone motion sensors to estimate device angle and remind user
 - **Makes the habit less boring.** Daily scores earn coins that can be used to customise a slime character.
 - **Supports English and Thai.**
 
-### Home screen
-
-![Posture Guard home screen preview from a Flutter widget test](test/goldens/home_good_390x844.png)
-
-*UI preview from the project's Flutter widget tests.*
-
----
-
 ## How it works
 
 The main posture pipeline is:
